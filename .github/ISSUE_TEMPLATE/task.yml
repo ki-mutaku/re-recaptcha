@@ -1,6 +1,6 @@
 name: ✅タスク
 description: 作業タスクを登録します
-title: "[TASK] "
+title: "[TASK]:  "
 labels: []
 body:
   - type: textarea
