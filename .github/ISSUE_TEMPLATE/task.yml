@@ -1,72 +1,45 @@
-name: Bug Report
-description: File a bug report.
-title: "[Bug]: "
-labels: ["bug", "triage"]
-projects: ["octo-org/1", "octo-org/44"]
-assignees:
-  - octocat
-type: bug
+name: タスク
+description: 作業タスクを登録します
+title: "[Task] "
+labels: []
 body:
-  - type: markdown
+  - type: textarea
+    id: summary
     attributes:
-      value: |
-        Thanks for taking the time to fill out this bug report!
-  - type: input
-    id: contact
+      label: 概要
+      description: このタスクの目的や背景を簡潔に説明してください。
+      placeholder: 例）〇〇機能のリファクタリングを行う
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
     attributes:
-      label: Contact Details
-      description: How can we get in touch with you if we need more info?
-      placeholder: ex. email@example.com
+      label: 作業フロー（予想）
+      description: 想定される作業の手順やステップを記載してください。
+      placeholder: |
+        1. 〇〇を確認する
+        2. 〇〇を修正する
+        3. テストを実施する
     validations:
       required: false
+
   - type: textarea
-    id: what-happened
+    id: done_criteria
     attributes:
-      label: What happened?
-      description: Also tell us, what did you expect to happen?
-      placeholder: Tell us what you see!
-      value: "A bug happened!"
+      label: 完了条件
+      description: このタスクが完了したと判断できる条件を記載してください。
+      placeholder: |
+        - [ ] 〇〇が動作すること
+        - [ ] テストがすべてパスすること
     validations:
       required: true
-  - type: dropdown
-    id: version
-    attributes:
-      label: Version
-      description: What version of our software are you running?
-      options:
-        - 1.0.2 (Default)
-        - 1.0.3 (Edge)
-      default: 0
-    validations:
-      required: true
-  - type: dropdown
-    id: browsers
-    attributes:
-      label: What browsers are you seeing the problem on?
-      multiple: true
-      options:
-        - Firefox
-        - Chrome
-        - Safari
-        - Microsoft Edge
+
   - type: textarea
-    id: logs
+    id: notes
     attributes:
-      label: Relevant log output
-      description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
-      render: shell
-  - type: checkboxes
-    id: terms
-    attributes:
-      label: Code of Conduct
-      description: By submitting this issue, you agree to follow our [Code of Conduct](https://example.com).
-      options:
-        - label: I agree to follow this project's Code of Conduct
-          required: true
-  - type: upload
-    id: screenshots
-    attributes:
-      label: Upload screenshots
-      description: If applicable, add screenshots to help explain your problem.
+      label: 備考（何かあれば）
+      description: 補足情報・参考リンク・懸念点など、あれば記載してください。
+      placeholder: 特になし
     validations:
       required: false
