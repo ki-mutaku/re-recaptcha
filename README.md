@@ -1,0 +1,2 @@
+# re-recaptcha
+reCAPTCHAのような画像当てゲームを機械学習で当てるプロジェクト
