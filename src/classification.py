@@ -1,1 +1,2 @@
-# classification.py
+# 画像分類タスク
+
