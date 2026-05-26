@@ -3,8 +3,8 @@ revision = 3
 requires-python = ">=3.12"
 
 [options]
-exclude-newer = "2026-05-19T01:59:16.611889Z"
-exclude-newer-span = "P1W"
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
+exclude-newer-span = "P2W"
 
 [[package]]
 name = "contourpy"
