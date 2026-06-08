@@ -1,3 +1,14 @@
+"""
+画像分類スクリプト (classification.py)
+
+- モデル: ResNet18（ImageNetで学習済み）
+- 役割: 画像全体から1つのラベルを予測して判定する
+- 前処理: 224×224のサイズにパディング・整形する
+- 後処理: top_k(上位k件)の予測結果を見て、captcha用のおおまかなカテゴリに寄せる
+- 制約: ImageNetのラベル範囲にある対象のみ分類可能
+
+"""
+
 import argparse
 import re
 from pathlib import Path
@@ -9,7 +20,7 @@ from torchvision.models import ResNet18_Weights
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
 IMAGE_SIZE = 224
-DEFAULT_IMAGE_DIR = "img"
+DEFAULT_IMAGE_DIR = "img_bus_rain"
 DEFAULT_TARGET = "bus"
 DEFAULT_TOP_K = 3
 
