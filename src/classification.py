@@ -18,6 +18,10 @@ from PIL import Image, ImageOps
 from torchvision import models, transforms
 from torchvision.models import ResNet18_Weights
 
+from pytorch_grad_cam import GradCAM
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+from pytorch_grad_cam.utils.image import show_cam_on_image
+
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
 IMAGE_SIZE = 224
 DEFAULT_IMAGE_DIR = "img_bus_rain"
