@@ -6,7 +6,7 @@ def main():
     model = YOLO('yolov8n.pt')
 
     # 1. 処理したいフォルダ名を設定
-    folder_path = 'test_images_fog'
+    folder_path = 'my_recaptcha_dataset'
     
     # フォルダの存在チェック
     if not os.path.exists(folder_path):
