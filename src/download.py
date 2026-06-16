@@ -1,40 +1,93 @@
 import fiftyone as fo
 import fiftyone.zoo as foz
-import json  # JSONを整形するために追加
-import os    # ファイルパスを扱うために追加
+import os
+import shutil
+import json
+import csv
 
-# reCAPTCHAでおなじみの欲しいクラスを指定
-target_classes = ["bus"]
+def main():
+    print("🚀 COCOデータセットから特定の画像を検索・ダウンロードします...")
 
-# COCOデータセットから指定したクラスを含む画像だけをダウンロード
-dataset = foz.load_zoo_dataset(
-    "coco-2017",
-    split="train",
-    label_types=["detections"],
-    classes=target_classes,
-    max_samples=500,
-)
+    dataset = foz.load_zoo_dataset(
+        "coco-2017",
+        split="validation",
+        label_types=["detections"],
+        classes=["bus", "car", "traffic light"],
+        max_samples=30,
+    )
 
-# 出力先のフォルダを指定
-export_dir = "./my_recaptcha_dataset"
+    export_dir = "test_images_coco"
+    os.makedirs(export_dir, exist_ok=True)
 
-# ダウンロードしたデータをローカルのフォルダに出力
-dataset.export(
-    export_dir=export_dir,
-    dataset_type=fo.types.COCODetectionDataset,
-)
+    print(f"\n📂 '{export_dir}' フォルダに画像をまとめています...")
 
-# ---------------------------------------------------------
-# 【追加部分】 出力された1行のJSONを読み込み、綺麗に整形して上書きする
-# ---------------------------------------------------------
-json_path = os.path.join(export_dir, "labels.json")
+    annotations = {}   # JSON用（後続スクリプトで流用）
+    csv_rows = []      # CSV用（目視確認用）
 
-# 1. 1行に圧縮されたJSONデータを一度Pythonに読み込む
-with open(json_path, 'r', encoding='utf-8') as f:
-    coco_data = json.load(f)
+    for sample in dataset:
+        original_path = sample.filepath
+        filename = os.path.basename(original_path)
+        shutil.copy(original_path, os.path.join(export_dir, filename))
 
-# 2. indent=4（スペース4つ分の字下げ）と改行を入れて上書き保存する
-with open(json_path, 'w', encoding='utf-8') as f:
-    json.dump(coco_data, f, indent=4, ensure_ascii=False)
+        # 画像サイズを取得（metadataが空の場合は手動で読む）
+        if sample.metadata and sample.metadata.width:
+            img_w = sample.metadata.width
+            img_h = sample.metadata.height
+        else:
+            import cv2
+            img = cv2.imread(original_path)
+            img_h, img_w = img.shape[:2]
 
-print("ダウンロードとJSONの整形（改行処理）が完了しました！")
+        boxes = []
+        if sample.ground_truth:
+            for det in sample.ground_truth.detections:
+                # FiftyOneの座標は [x_left, y_top, width, height] で 0〜1 の相対値
+                rx, ry, rw, rh = det.bounding_box
+
+                # ピクセル座標に変換
+                px = round(rx * img_w, 1)
+                py = round(ry * img_h, 1)
+                pw = round(rw * img_w, 1)
+                ph = round(rh * img_h, 1)
+
+                boxes.append({
+                    "label": det.label,
+                    "bbox_pixel": [px, py, pw, ph]  # [x, y, w, h]
+                })
+
+                # CSV用の行を追加
+                csv_rows.append({
+                    "filename": filename,
+                    "label": det.label,
+                    "x": px,
+                    "y": py,
+                    "w": pw,
+                    "h": ph,
+                    "x2": round(px + pw, 1),  # 右下X（確認しやすいよう追加）
+                    "y2": round(py + ph, 1),  # 右下Y（確認しやすいよう追加）
+                    "img_w": img_w,
+                    "img_h": img_h,
+                })
+
+        annotations[filename] = boxes
+
+    # --- JSON保存（後続スクリプト用） ---
+    json_path = os.path.join(export_dir, "annotations.json")
+    with open(json_path, "w") as f:
+        json.dump(annotations, f, indent=2, ensure_ascii=False)
+
+    # --- CSV保存（目視確認用） ---
+    csv_path = os.path.join(export_dir, "annotations_preview.csv")
+    fieldnames = ["filename", "label", "x", "y", "w", "h", "x2", "y2", "img_w", "img_h"]
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(csv_rows)
+
+    print(f"\n✅ 完了！ '{export_dir}' フォルダを確認してください。")
+    print(f"  📄 annotations.json        → 後続スクリプト用")
+    print(f"  📊 annotations_preview.csv → 座標の目視確認用")
+    print(f"  🖼️  検出ボックス数: {len(csv_rows)} 件 / {len(annotations)} 枚")
+
+if __name__ == "__main__":
+    main()
