@@ -1,6 +1,7 @@
 # 画像分類タスク
 
 import torch
+import glob
 from torchvision import models, transforms
 from torchvision.models import ResNet18_Weights
 from PIL import Image
@@ -74,17 +75,7 @@ def solve_recaptcha_9_images(image_paths, target_text):
 # --- 実行部分 ---
 if __name__ == "__main__":
     # お手元の画像パスのリストに書き換えてください
-    image_paths = [
-        "img/1.jpg",
-        "img/2.jpg",
-        "img/3.jpg",
-        "img/4.jpg",
-        "img/5.jpg",
-        "img/6.jpg",
-        "img/7.jpg",
-        "img/8.jpg",
-        "img/9.jpg",
-    ]
+    image_paths = sorted(glob.glob("busbus/*.jpg"))
 
     # "bus" を探す
     result = solve_recaptcha_9_images(image_paths, "bus")
