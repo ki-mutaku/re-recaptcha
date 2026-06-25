@@ -2,9 +2,10 @@
 画像分類スクリプト (classification.py)
 
 - モデル: ResNet18（ImageNetで学習済み）
-- 役割: 画像全体から1つのラベルを予測して判定する
+- 役割: 画像ごとに「お題が写っている確信度スコア」を求めて判定する
 - 前処理: 224×224のサイズにパディング・整形する
-- 後処理: top_k(上位k件)の予測結果を見て、captcha用のおおまかなカテゴリに寄せる
+- 後処理: softmax確率を captcha用のおおまかなカテゴリごとに合計してスコア化し、
+          スコアが閾値以上の画像を選択する
 - 制約: ImageNetのラベル範囲にある対象のみ分類可能
 
 """
@@ -18,15 +19,17 @@ from PIL import Image, ImageOps
 from torchvision import models, transforms
 from torchvision.models import ResNet18_Weights
 
-from pytorch_grad_cam import GradCAM
-from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
-from pytorch_grad_cam.utils.image import show_cam_on_image
-
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
 IMAGE_SIZE = 224
 DEFAULT_IMAGE_DIR = "img_bus_rain"
 DEFAULT_TARGET = "bus"
-DEFAULT_TOP_K = 3
+
+# 選択の判定に使う確信度スコアの閾値。スコアが閾値以上の画像を「お題が写っている」とみなす。
+# 値を下げるほど再現率が上がり、上げるほど適合率が上がる。
+DEFAULT_THRESHOLD = 0.05
+
+# predict_image_labels で人が中身を確認する用に表示するラベル件数（判定には使わない）。
+DEFAULT_DISPLAY_TOP_K = 3
 
 # ResNetが返す細かいImageNetラベルを、captchaで使いたい大まかな分類にまとめる。
 # 例: "school bus" や "minibus" は、どちらも "bus" として扱う。
@@ -120,17 +123,14 @@ def build_preprocess():
     )
 
 
-def predict_image_labels(
-    image_path, model, categories, preprocess, top_k=DEFAULT_TOP_K
-):
+def predict_class_probabilities(image_path, model, preprocess):
     """
-    1枚の画像を分類し、確率が高い順に top_k 件のラベルを返す。
+    1枚の画像を分類し、全クラスのsoftmax確率(1次元Tensor)を返す。
+
+    生の出力(logits)をsoftmaxで0〜1の確率に変換することで、
+    「どのくらいの確信度でそのクラスと判断したか」を比較できるようにする。
+    この確率を大分類ごとに合計したものが target_confidence_score のスコアになる。
     """
-    if top_k < 1:
-        raise ValueError("top_k は 1 以上を指定してください。")
-
-    top_k = min(top_k, len(categories))
-
     image = Image.open(image_path).convert("RGB")
     padded_image = ImageOps.pad(image, (IMAGE_SIZE, IMAGE_SIZE), color=(0, 0, 0))
     input_tensor = preprocess(padded_image).unsqueeze(0)
@@ -138,8 +138,48 @@ def predict_image_labels(
     with torch.no_grad():
         output = model(input_tensor)
 
-    _, top_indices = torch.topk(output, k=top_k, dim=1)
-    labels = [categories[index.item()] for index in top_indices[0]]
+    return torch.softmax(output[0], dim=0)
+
+
+def target_confidence_score(probabilities, categories, target_text):
+    """
+    全クラス確率のうち、お題の大分類に属するクラスの確率を合計してスコアにする。
+
+    例: target が "bus" なら "school bus"・"minibus"・"trolleybus" など
+    bus にまとめられる全クラスの確率を足し、「この画像がバスである確信度」とする。
+    スコアが閾値以上かどうかで選択／非選択を決める。
+    クラスの判定基準は find_coarse_categories による大分類一致＋ラベルの部分一致。
+    """
+    normalized_target = normalize_target(target_text)
+
+    score = 0.0
+    for index, label in enumerate(categories):
+        coarse_categories = find_coarse_categories(label)
+        if normalized_target in coarse_categories or normalized_target in label.lower():
+            score += probabilities[index].item()
+
+    return score
+
+
+def predict_image_labels(
+    image_path, model, categories, preprocess, top_k=DEFAULT_DISPLAY_TOP_K, verbose=True
+):
+    """
+    1枚の画像を分類し、確率が高い順に top_k 件のラベルを返す（中身の確認用）。
+
+    選択の判定そのものは確信度スコアの閾値で行う（solve_recaptcha_images 参照）。
+    この関数はモデルが何を見ているかを人が確認するための補助的なもの。
+    verbose=False にすると print を抑制できる。
+    """
+    if top_k < 1:
+        raise ValueError("top_k は 1 以上を指定してください。")
+
+    top_k = min(top_k, len(categories))
+
+    probabilities = predict_class_probabilities(image_path, model, preprocess)
+
+    _, top_indices = torch.topk(probabilities, k=top_k)
+    labels = [categories[index.item()] for index in top_indices]
     coarse_categories = sorted(
         {
             coarse_category
@@ -148,8 +188,9 @@ def predict_image_labels(
         }
     )
 
-    print(f"判定結果 [{image_path}]: {labels}")
-    print(f"大まかな分類 [{image_path}]: {coarse_categories}")
+    if verbose:
+        print(f"判定結果 [{image_path}]: {labels}")
+        print(f"大まかな分類 [{image_path}]: {coarse_categories}")
 
     return labels
 
@@ -181,34 +222,15 @@ def find_coarse_categories(label):
     return matched_categories
 
 
-def labels_contain_target(labels, target_text):
+def solve_recaptcha_images(
+    image_paths, target_text, threshold=DEFAULT_THRESHOLD, verbose=True
+):
     """
-    予測ラベルの中に、お題の文字列が含まれているかを調べる。
+    画像一覧から、お題の確信度スコアが閾値以上の画像インデックス番号を返す。
 
-    お題が大分類として定義されている場合は、細かいImageNetラベルを大分類にまとめて判定する。
-    例: target_text が "bus" の場合、"school bus" や "minibus" を一致として扱う。
-    """
-    normalized_target = normalize_target(target_text)
-
-    for label in labels:
-        coarse_categories = find_coarse_categories(label)
-
-        if normalized_target in coarse_categories:
-            return True
-
-        # 未定義のお題でも試せるように、従来どおり文字列の部分一致も残す。
-        if normalized_target in label.lower():
-            return True
-
-    return False
-
-
-def solve_recaptcha_images(image_paths, target_text, top_k=DEFAULT_TOP_K):
-    """
-    画像一覧から、お題に一致すると判定された画像のインデックス番号を返す。
-
+    各画像のsoftmax確率を target_confidence_score でお題の大分類スコアにまとめ、
+    そのスコアが threshold 以上なら「お題が写っている」とみなして選択する。
     返すインデックスはPythonのリストに合わせて0始まり。
-    例: 先頭の画像が一致した場合は 0 を返す。
     """
     model, categories = load_resnet_classifier()
     preprocess = build_preprocess()
@@ -216,15 +238,13 @@ def solve_recaptcha_images(image_paths, target_text, top_k=DEFAULT_TOP_K):
     selected_indices = []
 
     for index, image_path in enumerate(image_paths):
-        labels = predict_image_labels(
-            image_path=image_path,
-            model=model,
-            categories=categories,
-            preprocess=preprocess,
-            top_k=top_k,
-        )
+        probabilities = predict_class_probabilities(image_path, model, preprocess)
+        score = target_confidence_score(probabilities, categories, target_text)
 
-        if labels_contain_target(labels, target_text):
+        if verbose:
+            print(f"スコア [{image_path}]: {target_text}={score:.3f}")
+
+        if score >= threshold:
             selected_indices.append(index)
 
     return selected_indices
@@ -246,10 +266,10 @@ def parse_args():
         "--target", default=DEFAULT_TARGET, help="探したい対象の英語ラベル"
     )
     parser.add_argument(
-        "--top-k",
-        type=int,
-        default=DEFAULT_TOP_K,
-        help="判定結果の上位何件までを見るか",
+        "--threshold",
+        type=float,
+        default=DEFAULT_THRESHOLD,
+        help="お題と判定する確信度スコアの閾値（0〜1、低いほど多く選ぶ）",
     )
 
     return parser.parse_args()
@@ -269,7 +289,7 @@ def main():
     selected_indices = solve_recaptcha_images(
         image_paths=image_paths,
         target_text=args.target,
-        top_k=args.top_k,
+        threshold=args.threshold,
     )
 
     print("読み込んだ画像:", [str(path) for path in image_paths])
