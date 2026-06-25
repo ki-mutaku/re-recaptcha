@@ -1,0 +1,7 @@
+path: /Users/yooseiisikawa/sakuhin/IP/my_bus_dataset_robust
+train: images/train
+val: images/train
+names:
+  0: bus
+  1: car
+  2: traffic light
