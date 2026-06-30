@@ -1,218 +1,250 @@
-# 画像分類
+# 画像分類（bus を当てる班）— マニュアル
 
-reCAPTCHA の「お題に合う画像を選ぶ」課題を、画像分類で解く側のまとめ。
-お題は今のところ bus だけに絞っている。
+reCAPTCHA の「お題に合う画像を選ぶ」課題を、**画像分類**で解く側のまとめ。
+お題は今のところ **bus** に絞っている。マスの位置（座標）を出す物体検出は別の班の担当で、こちらは触らない。
+1枚ごとに「バスか／そうでないか」を判定する。
 
-## やりたいこと
+> **結論（先に）**
+> - bus は **zero-shot（ImageNet学習済みResNetをそのまま使う）で十分**。合成の晴れ・雨では FT はむしろ少し下がる。
+> - ただし **本物の reCAPTCHA 画像では FT が逆転して上回る**（後述）。
+> - 学習データの劣化フィルタは「夜・雨（暗く＋白線）」をやめ、**本物寄りの劣化（低解像度化＋JPEG再圧縮）** に作り直した。本物との **FID** でこの方が妥当だと数字で確認済み。
 
-9枚の画像から「バスが写っているもの」を選ぶ。
-位置(座標)は出さず、1枚ごとに「バスか、そうでないか」を判定するだけ。
-マスの位置を出す物体検出は別の班がやっていて、こちらは触らない。
+---
 
-試した手は2つ。
+## 1. クイックスタート
 
-- zero-shot は、ImageNet で学習済みの ResNet18 をそのまま使う。学習しない。(`classification.py`)
-- fine-tuning(FT)は、その ResNet18 を bus と other の2クラスに微調整する。(`train_resnet.py`)
+リポジトリの **ルート** で実行する（スクリプトは `dataset/` などを相対パスで見るため、`cd 画像分類` してからだと壊れる）。
 
-結論を先に書くと、bus については **zero-shot で十分**だった。FT はむしろ少し成績を落とした。理由は後述する。
+```bash
+uv sync                          # 依存をインストール（uv.lock 固定）
+uv run python 画像分類/main.py    # 学習データ生成→分割→学習→本物DL→フィルタ妥当性評価 を一括実行
+```
 
-## ディレクトリの中身
+`main.py` は途中まで成果物があればスキップする。部分的にやり直したいとき:
 
-直下が現役のパイプライン。`未使用/` は役目を終えたファイルの置き場。
+```bash
+uv run python 画像分類/main.py --from-step 4   # 4(学習)から再開
+uv run python 画像分類/main.py --force         # 全ステップ強制再実行
+uv run python 画像分類/main.py --n 600         # 本物画像を各600枚に制限（軽い）
+```
+
+評価レポート（zero-shot vs FT）は別途:
+
+```bash
+uv run python 画像分類/eval/make_real_recaptcha_labels.py   # 本物のラベルCSVを作る（初回のみ）
+uv run python 画像分類/eval/compare_models.py               # 3データセットでAP比較
+```
+
+---
+
+## 2. ファイル早見表
+
+直下が現役パイプライン。`未使用/` は役目を終えたファイルの置き場。
 
 | ファイル | 役割 |
 |---|---|
-| `classification.py` | zero-shot ResNet。学習なしでバス確信度を出す |
-| `data_augment.py` | 夜・雨の加工を作る共通部品。download系2本が読む |
-| `download_train_bus.py` | COCO からバス画像を取得し、原本/夜/雨の3枚に加工して `dataset/train/bus/` へ |
+| `main.py` | **一括実行の入口**。下の各スクリプトを順に呼ぶ（`--from-step` / `--force` 対応）|
+| `data_augment.py` | 劣化フィルタの共通部品。学習データ生成は本物寄りフィルタ `make_recaptcha_like_image` を使う |
+| `download_train_bus.py` | COCO からバス画像を取得し、原本＋劣化2種の計3枚にして `dataset/train/bus/` へ |
 | `download_train_other.py` | 同じ加工で「バス以外」を `dataset/train/other/` へ |
-| `split_train_val.py` | `dataset/train` を train と val に分ける |
-| `train_resnet.py` | FT 本体。`best_resnet18_bus.pth` を吐く |
-| `ex_train_bus.py` | BDD100K から過酷な環境のバスを抜き出す(外部データが要る。今は未使用に近い) |
-| `predict_recaptcha.py` | 学習済みモデルでマス画像を判定する |
+| `split_train_val.py` | `dataset/train` を train/val に分割（**元画像ID単位**でリーク防止）|
+| `train_resnet.py` | FT 本体。`best_resnet18_bus.pth` を吐く（F1でベスト選択）|
+| `classification.py` | zero-shot ResNet。学習なしで bus 確信度スコアを出す |
+| `predict_recaptcha.py` | FTモデルで 9マス（`test_images/tile_*.jpg`）を判定する本番デモ |
 | `plot.py` | 学習ログをグラフにする |
-| `eval/` | 評価一式(後述) |
+| `eval/` | 評価一式（下表）|
+| `real_recaptcha/` | 本物 reCAPTCHA 画像（git管理外。`download_real_recaptcha.py` が作る）|
 
-## データの作り方
+### eval/ の中身
 
-学習データは COCO から自動で集める。最初の1回だけ注釈 zip(約240MB)を落とすので時間がかかる。
+| ファイル | 役割 |
+|---|---|
+| `compare_models.py` | **本命の評価**。zero-shot と FT を同じAP軸で3データセット比較→レポート＋PR曲線 |
+| `evaluate.py` | 1モデル単体の評価ロジック（AP・PR曲線・閾値スイープ）。`compare_models.py` が利用 |
+| `download_real_recaptcha.py` | 本物データセット（HuggingFace）を取得し `real_recaptcha/{bus,nonbus}/` へ |
+| `make_real_recaptcha_labels.py` | `real_recaptcha/` のフォルダ構成から正解ラベルCSVを自動生成 |
+| `filter_validity.py` | **フィルタ妥当性の定量評価**。合成劣化が本物にどれだけ近いかを FID で測る |
+| `labels/` | 正解ラベルCSV（`img` / `img_bus_rain` は手付け、`real_recaptcha` は自動生成）|
+| `results/` | 評価レポート・グラフ・CSV の出力先 |
 
+---
+
+## 3. データの作り方（学習データ）
+
+学習データは COCO 2017 から自動で集める。最初の1回だけ注釈zip（約240MB）を落とすので時間がかかる。
+
+```bash
+uv run python 画像分類/download_train_bus.py     # → dataset/train/bus/   に 300枚
+uv run python 画像分類/download_train_other.py   # → dataset/train/other/ に 300枚
+uv run python 画像分類/split_train_val.py        # → train 240/240, val 60/60 に分割
 ```
-# リポジトリのルートで実行する(下のコマンドは全部そう)
-python 画像分類/download_train_bus.py     # → dataset/train/bus/   に 300枚
-python 画像分類/download_train_other.py   # → dataset/train/other/ に 300枚
-python 画像分類/split_train_val.py        # → train 240/240, val 60/60 に分割
+
+ベース画像100枚 × (原本 / 劣化1 / 劣化2) = 300枚/クラス。ファイル名のサフィックスは
+`_original.jpg` / `_degraded1.jpg` / `_degraded2.jpg`。
+
+### ここでハマった点（残しておく）
+
+**偏りの修正。** 最初は bus が素の昼間画像だけで、other だけに劣化版があった。これだと
+「劣化した画像＝バスじゃない」と覚えてしまい、劣化したバスを取りこぼす。bus にも other と
+**まったく同じ劣化**を入れて、両クラスとも 300枚にそろえた。加工は `data_augment.py` に1つだけ置き、
+bus と other が必ず同じ条件になるようにしている。
+
+**リークの修正。** 原本と劣化版は同じ景色なので、ファイル単位でランダムに train/val を分けると
+同じ景色が両方に入って val の点数が甘くなる。`split_train_val.py` は**元画像のID単位**でまとめて
+分けるので、同一景色の3枚は必ず train か val のどちらか片方に入る。
+
+**フィルタ切替時の混在バグ。** フィルタを変えると古いサフィックス（旧 `_night`/`_rain`）の
+ファイルが残って新生成分と混ざる。`data_augment.py` の `clean_stale_variants()` が
+`download_train_*.py` 実行時に現行サフィックス以外を自動削除して防いでいる。
+
+---
+
+## 4. 劣化フィルタ（重要：本物寄りに作り直した）
+
+学習データの「水増し（augmentation）」に使う劣化加工。**学習にだけ使い、評価には混ぜない。**
+
+### 旧フィルタ（廃止）
+- `make_night_image`（暗く）/ `make_rainy_noise_image`（暗く＋白い線）。
+- 本物の reCAPTCHA を見ると **雨だれの線も夜の暗さも入っていない**ので、劣化の種類が的外れだった。
+- 関数は `filter_validity.py` の比較用に残してあるが、学習データ生成では使わない。
+
+### 新フィルタ `make_recaptcha_like_image`（現行）
+本物 bus 画像（100×100）の劣化を観察して再現:
+1. **低解像度化**（縮小→元サイズへ戻す。細部を潰す）
+2. **軽いガウシアンぼかし**
+3. **彩度・コントラストを少し落とす**
+4. **JPEG 低品質再圧縮**（ブロックノイズ。本物のノイズ再現に一番効く）
+
+### 妥当性の検証（FID で定量化）
+「合成劣化が本物の劣化分布にどれだけ近いか」を、ResNet18特徴の **FID**（小さいほど近い＝妥当）で測った。
+クリーンな bus 画像に各フィルタをかけ、本物 bus 6,693枚との距離を比較:
+
+| フィルタ | FID（↓本物に近い）| clean基準 | 判定 |
+|---|---:|---:|---|
+| clean（劣化なし） | 206.7 | — | 基準 |
+| old_night（暗く） | 179.2 | +27.5 | 少し近づく |
+| **old_rain（暗く＋白線）** | **381.5** | **−174.8** | **逆効果**（本物に無い線で遠ざかる）|
+| **new（低解像度＋ぼけ＋JPEG）** | **164.5** | **+42.2** | **最も近い＝妥当** |
+
+```bash
+uv run python 画像分類/eval/filter_validity.py   # → eval/results/filter_validity.csv
 ```
 
-ここで一度ハマったので残しておく。
+> 注意。同時に出す domainAUC（本物 vs 合成を見分ける分類器の AUC）は全フィルタで≈1.0に飽和する。
+> これは劣化の差だけでなく**被写体の差**（COCOの街並みbus vs reCAPTCHAの切り抜きタイル）も含むため。
+> FID の**相対比較**（同じクリーン画像に劣化だけ変えて適用）は劣化妥当性の比較として有効で、
+> 絶対値の大きさは被写体ギャップ（フィルタでは埋まらない部分）を表す。
 
-**偏りの修正。** 最初は bus が素の昼間画像100枚だけで、other だけに夜・雨の加工版があった。これだと「暗い画像 = バスじゃない」と覚えてしまい、雨のバスをほぼ全部取りこぼす。bus にも同じ夜・雨加工を入れて、両クラスとも 300枚(原本100/夜100/雨100)にそろえた。加工処理は `data_augment.py` に1つだけ置いて、bus と other が必ず同じ条件になるようにしてある。
+---
 
-**リークの修正。** 原本、夜、雨は同じ景色なので、ファイル単位でランダムに train/val を分けると、同じ景色が両方に入って val の点数が甘くなる。`split_train_val.py` は元画像のID単位でまとめて分けるので、3枚は必ず train か val のどちらか片方に入る。
+## 5. 学習
 
-> 根拠。枚数はフォルダを数えれば確認できる(`ls dataset/train/bus | wc -l` など)。300 は「ベース100枚 × (原本/夜/雨)の3」。240/60 は val を2割にした分割(100枚の元画像のうち20枚分=60ファイルを val へ)で、`split_train_val.py` の出力ログにも出る。
-
-## 学習
-
+```bash
+uv run python 画像分類/train_resnet.py
 ```
-python 画像分類/train_resnet.py
-```
 
-Mac の MPS で 10エポック、だいたい1分で終わる。出力はルートに2つ。
+Mac の MPS で 10エポック、だいたい1分。出力はリポジトリのルートに2つ。
 
 - `best_resnet18_bus.pth` … 重み
-- `best_resnet18_bus_classes.json` … クラスの並び(`["bus", "other"]`)。推論側がどっちが bus か迷わないように一緒に保存している
+- `best_resnet18_bus_classes.json` … クラスの並び `["bus", "other"]`（推論側がどっちが bus か迷わないため）
 
-ベストモデルは Accuracy ではなく bus の F1 で選ぶ。捕捉漏れと誤検出のバランスを見たいので。
-今回のベストは epoch 5 で val F1 = 0.828。ただし epoch 3 あたりから train はほぼ満点なのに val の loss が上がっていく。元画像が200枚と少ないので過学習している。エポックを増やす意味は薄い。
+ベストは Accuracy ではなく **bus の F1** で選ぶ（捕捉漏れと誤検出のバランスを見たいため）。
+元画像が少ない（100ベース×3）ので、数エポックで train はほぼ満点になり val loss は上がる＝過学習気味。
+エポックを増やす意味は薄い。
 
-> 根拠。これらは `train_resnet.py` の実行ログ。各エポックで Val の bus に対する TP/FP/FN と F1 を出していて、F1 が最大の epoch をベストとして `.pth` に保存する。0.828 はその epoch 5 の Val F1。
+---
 
-## 評価
+## 6. 評価と結果
 
-`eval/` に2本ある。どちらも本物の評価画像を使う。
+### 評価データ（3セット・すべて本物画像）
+- `img/` … 晴れ（劣化なし）。正例11 / 負例99（手付けラベル）
+- `img_bus_rain/` … 雨（劣化あり）。正例50 / 負例52（手付けラベル）
+- `画像分類/real_recaptcha/` … **本物 reCAPTCHA**。正例(bus)6,693 / 負例(nonbus)6,693（フォルダから自動ラベル）
 
-- `img/` … 晴れ(劣化なし)。正例11 / 負例99
-- `img_bus_rain/` … 雨(劣化あり)。正例50 / 負例52
-
-> 根拠。正例/負例の数は、ラベルCSV(`eval/labels/img_labels.csv` と `img_bus_rain_labels.csv`)の `has_bus` 列を数えたもの。True が正例、False が負例。
-
-合成した夜・雨は学習にだけ使い、評価には混ぜない。自分でかけたフィルタで評価すると、フィルタを戻す力を測るだけになって、本物のキャプチャでの強さが分からなくなるため。
-
-```
-# zero-shot 単体の評価(PR曲線とレポートが出る)
-python 画像分類/eval/evaluate.py --image-dir img --labels 画像分類/eval/labels/img_labels.csv
-python 画像分類/eval/evaluate.py --image-dir img_bus_rain --labels 画像分類/eval/labels/img_bus_rain_labels.csv
-
-# zero-shot vs FT の比較(本命)
-python 画像分類/eval/compare_models.py
+```bash
+uv run python 画像分類/eval/compare_models.py   # → eval/results/zeroshot_vs_ft_比較.md ほか
 ```
 
-### 指標の意味(初学者向け)
-
-モデルは画像ごとに「バスっぽさ」を 0〜1 のスコアで出す。ある値(閾値)以上のものを「選ぶ」。閾値を上げれば慎重に、下げれば大胆に選ぶことになる。
-
-まず選んだ結果を4種類に分ける。
-
-- TP … バスを正しく選んだ
-- FP … バスじゃないのに選んだ(誤爆)
-- FN … バスなのに選ばなかった(見逃し)
-- TN … バスじゃないものを正しく見送った
-
-この4つから2つの割合を作る。
-
-- 適合率(precision) = TP / (TP + FP)。選んだ画像のうち、本当にバスだった割合。高いほど誤爆が少ない。
-- 再現率(recall) = TP / (TP + FN)。本物のバス全部のうち、取りこぼさず選べた割合。高いほど見逃しが少ない。
-
-この2つは綱引きの関係にある。慎重に選べば適合率は上がるが再現率は下がる。大胆に選べば逆になる。だから片方だけ見ても強さは分からない。そこで次の2つを使う。
-
-- F1 … 適合率と再現率の調和平均。両方そこそこ高いと大きくなる。バランスの良い一点の強さ。
-- PR-AUC(AP) … 閾値を端から端まで動かすと、適合率と再現率の関係が曲線になる(PR曲線)。その曲線の下の面積が AP。閾値をどこに決めるか選ばなくていいので、モデル全体の力を1つの数で表せる。1.0 が満点。
-
-zero-shot と FT はスコアの作り方が違うが、どちらも 0〜1 のバスっぽさなので、同じ AP の軸で並べて比べられる。
-
-### 結果(AP)
+### 結果（AP＝PR曲線の下の面積。1.0が満点）
 
 | 評価データ | 正例/負例 | zero-shot AP | fine-tuned AP | 差(FT−ZS) |
 |---|---:|---:|---:|---:|
-| 晴れ (img) | 11/99 | 1.000 | 0.953 | −0.047 |
-| 雨 (img_bus_rain) | 50/52 | 0.978 | 0.930 | −0.049 |
+| 晴れ (img) | 11/99 | 1.000 | 0.984 | −0.016 |
+| 雨 (img_bus_rain) | 50/52 | 0.978 | 0.946 | −0.032 |
+| **本物 (real_recaptcha)** | 6693/6693 | 0.875 | **0.911** | **+0.036** |
 
-> 根拠。AP の値は `uv run python 画像分類/eval/compare_models.py` の出力。同じ表が `eval/results/zeroshot_vs_ft_比較.md` にも保存される。計算は `compare_models.py` の `compute_average_precision` が、各画像のスコアを高い順に並べ、1枚ずつ選択を増やしながら 適合率 ×(再現率の増分) を足してPR曲線の面積を求めている。
+**読み取り。** 合成の晴れ・雨では一貫して zero-shot が勝つのに、**本物だけ FT が逆転して上回る**。
+これは「**本物寄りの新フィルタで学習したこと**が、本物への転移性能を実際に上げた」という証拠で、
+フィルタ妥当性の FID 評価（新フィルタが本物に最も近い）とも整合する。
+※ 学習データが少ない（100ベース×3）ので差は小さめ。枚数を増やせばもっとはっきりする可能性あり。
 
-読み方の例。晴れの zero-shot は AP=1.000、つまりスコアの高い順に並べると、上位にバスがきれいに固まっていて、どこで線を引いてもバスだけを選べる状態。満点。fine-tuned の 0.953 は、たまにバス以外が上位に混ざる。差の −0.047 は FT のほうが 0.047 ぶん悪い、という意味。
+### 指標の意味（初学者向け）
 
-晴れも雨も zero-shot の勝ち。FT は両方で 0.05 ほど下がった。
+モデルは画像ごとに「バスっぽさ」を 0〜1 のスコアで出す。ある閾値以上を「選ぶ」。
+選んだ結果を TP（正しく選んだ）/ FP（誤爆）/ FN（見逃し）/ TN（正しく見送り）に分け、2つの割合を作る。
 
-### PR曲線
+- **適合率(precision)** = TP/(TP+FP)。選んだうち本当にバスだった割合。高いほど誤爆が少ない。
+- **再現率(recall)** = TP/(TP+FN)。本物のバスのうち取りこぼさず選べた割合。高いほど見逃しが少ない。
 
-線が右上(面積が広い)ほど強い。青の zero-shot が、赤の fine-tuned を両方とも上に抜けている。
+この2つは綱引きの関係。だから単一の数で見たいとき:
 
-晴れ:
+- **F1** … 適合率と再現率の調和平均。両方そこそこ高いと大きい。
+- **PR-AUC（AP）** … 閾値を端から端まで動かしたPR曲線の下の面積。閾値を決めずにモデル全体の力を1数で表せる。1.0が満点。
 
-![晴れのPR曲線](eval/results/img_zs_vs_ft_PR.png)
+zero-shot と FT はスコアの作り方が違うが、どちらも 0〜1 のバスっぽさなので同じ AP 軸で比較できる。
 
-雨:
+---
 
-![雨のPR曲線](eval/results/img_bus_rain_zs_vs_ft_PR.png)
+## 7. 9マス本番デモ（マスごと判定）
 
-### AP以外の数字で見る
+リポジトリ・ルートの `split_recaptcha.py` が1枚のreCAPTCHA画像を3×3＝9マスに切り（`test_images/tile_*.jpg`）、
+`predict_recaptcha.py` が FTモデルで各マスを bus / other 判定して 3×3 グリッドで表示する。
 
-APは1つの要約値なので、運用に近い数字も出した。
+```bash
+uv run python split_recaptcha.py          # sample.jpg → test_images/tile_0..8.jpg
+uv run python 画像分類/predict_recaptcha.py # 9マスを判定して⭕️/❌で表示
+```
 
-| 評価データ | モデル | 最大F1(閾値) | 適合率1.0での再現率 | 再現率1.0での適合率 |
-|---|---|---:|---:|---:|
-| 晴れ | zero-shot | 1.000 (0.034) | 1.000 | 1.000 |
-| 晴れ | fine-tuned | 0.900 (0.995) | 0.818 | 0.647 |
-| 雨 | zero-shot | 0.935 (0.001) | 0.740 | 0.877 |
-| 雨 | fine-tuned | 0.842 (0.554) | 0.560 | 0.556 |
+---
 
-> 根拠。同じ `compare_models.py` の出力(`key_metrics`)。最大F1=閾値を全部試してF1が一番高くなった点と、そのときの閾値。適合率1.0での再現率=誤爆をゼロに保てる範囲で拾えた最大の再現率。再現率1.0での適合率=バスを全部拾うと決めたときに、選択がどれだけ綺麗か。
+## 8. 本物データセットのライセンス・倫理
 
-表の2つの新しい列は、両端の極端な使い方を見るためのもの。
+- 出典: HuggingFace `nobodyPerfecZ/recaptchav2-29k`（実際の reCAPTCHA v2 デモページをスクレイピングした実画像、29,568枚・100×100）。
+- ライセンス: MIT。ただし **画像は Google 所有**で、利用は **非営利・教育・研究目的に限定**。Google 非公式。
+- 本リポジトリでは **画像実体を git 管理しない**（`real_recaptcha/` は `.gitignore` 済み）。**再配布しない**。
+- 用途は研究目的であり、**CAPTCHA 突破そのものを目的としない**。
 
-- 「適合率1.0での再現率」は、ハズレを1枚も選ばないと決めたとき、何割のバスを拾えるか。
-- 「再現率1.0での適合率」は、バスを1枚も見逃さないと決めたとき、選んだ中のどれだけが本当にバスか。
+---
 
-晴れだと zero-shot は全部正解だった。バス11枚を取りこぼしも誤選択もなしで拾える(3つの列が全部1.000)。FT は同じ晴れでも、バスを全部拾おうとすると適合率が0.647まで落ちる。これは、11枚のバスを全部拾うのに17枚くらい選ぶ必要があり、そのうち6枚はバス以外、という意味(11 ÷ 0.647 ≒ 17、ハズレ約6枚で 6/17 ≒ 35%)。逆に誤選択をゼロに抑えると、今度は11枚中9枚しか拾えず2枚を見逃す(再現率0.818 = 9/11)。
+## 9. ゼロから再現する
 
-雨はもっと差が開く。zero-shot はバス50枚を全部拾っても適合率0.877で、取り違えは数枚にとどまる。FT で同じことをすると適合率0.556まで落ちる。50枚を全部拾うのに90枚くらい選ぶことになり、うち40枚ほどがバス以外(50 ÷ 0.556 ≒ 90)。選んだものの半分近くがハズレで、9枚のキャプチャでこれなら使い物にならない。
-
-### なぜ FT が負けたか
-
-理由はたぶん3つ。事前学習済みの ResNet がもともとバスをほぼ完璧に見分けること。200枚での微調整が過学習したこと(学習ログでも train はすぐ満点になり val の loss が上がっていった)。そして、自作の夜・雨フィルタが `img_bus_rain` の本物の雨に効かなかったこと。
-
-これは失敗ではなく結果として使える。bus のように ImageNet にあるお題は zero-shot で足りる。FT の効き目を見せたいなら、ImageNet に無い・弱いお題(消火栓、横断歩道、階段など)で測るべき、という話になる。
-
-## ゼロから再現する
-
-このリポジトリの中間ファイルが手元に無くても、同じ結果まで辿り着けるように書く。
-学習データは外から取り直し、モデルは作り直す前提。
+手元に中間ファイルが無くても同じ結果へ辿り着けるように。
 
 ### 必要なもの
+- macOS か Linux（Mac なら学習に MPS。無ければ CPU でも可、少し遅いだけ）。
+- Python 3.12（`.python-version` 固定）、`uv`、ネット接続。
+- パッケージは `uv.lock` で固定（torch / torchvision / numpy / matplotlib / pillow / datasets / scipy / scikit-learn）。
 
-- macOS か Linux。Mac なら学習に MPS が使える。無ければ CPU でも動く(少し遅いだけ)。
-- Python 3.12(`.python-version` で固定)。
-- `uv`(パッケージ管理)。
-- ネット接続。学習データを COCO から落とすので要る。
-- 使うパッケージは torch、torchvision、numpy、matplotlib、pillow。版は `uv.lock` で固定済み。
-
-### 環境を作る
-
-```
-uv sync          # uv.lock のとおりにパッケージを入れる
-```
-
-以降のコマンドは `uv run python ...` で動かす。必ずリポジトリのルートで実行する。スクリプトは `dataset/` などを相対パスで見ているので、`cd 画像分類` してからだと壊れる。
-
-### データの出どころ
-
-ここがゼロ再現の肝。2種類あって、片方は自動、片方は手作りの固定データ。
-
-**学習データ(自動で作れる)。** `download_train_bus.py` と `download_train_other.py` が COCO 2017 の train 注釈 zip を落として、bus とそれ以外を選んで加工する。選び方も加工もシード42で固定なので、同じ COCO からなら毎回同じ300枚×2クラスができる。`dataset/` と注釈 zip は容量が大きいので git には上げていない。下のコマンドで作り直す。
-
-**評価データ(スクリプトでは作れない)。** `img/`(晴れ)と `img_bus_rain/`(雨)、それと `eval/labels/` のラベルCSVは、人がバスの有無(`has_bus`)を付けた固定の資産。COCO 由来の画像だが、ラベルは手付けなので自動生成できない。リポジトリの外でゼロからやるなら、この画像群とラベルを持ってくるか、同等の評価セットを自分で用意してラベルを付け直す必要がある。ここだけは完全な自動再現にはならない。
-
-### 全手順(クリーンな環境で)
-
-```
-# 1. 環境
+### 全手順
+```bash
 uv sync
-
-# 2. 学習データを COCO から作る(初回は注釈zip約240MBのDLで時間がかかる)
-uv run python 画像分類/download_train_bus.py     # → dataset/train/bus/   300枚
-uv run python 画像分類/download_train_other.py   # → dataset/train/other/ 300枚
-uv run python 画像分類/split_train_val.py        # → train 240/240, val 60/60
-
-# 3. 学習(best_resnet18_bus.pth と classes.json がルートに出る)
-uv run python 画像分類/train_resnet.py
-
-# 4. 評価(img/ img_bus_rain/ とラベルが必要)
-uv run python 画像分類/eval/compare_models.py
+uv run python 画像分類/main.py                              # 学習データ〜本物DL〜フィルタ妥当性まで一括
+uv run python 画像分類/eval/make_real_recaptcha_labels.py   # 本物ラベルCSV
+uv run python 画像分類/eval/compare_models.py               # zero-shot vs FT のAP比較
 ```
 
 ### どこまで固定できているか
+- シードは全部42（`data_augment.py` / `split_train_val.py` / `train_resnet.py`）。同じ手順なら同じ分割・同じ学習。
+- パッケージ版は `uv.lock` 固定。
+- 固定しきれない部分: COCO 側の画像URLが将来変われば取得物が変わる。`img/` `img_bus_rain/` の評価ラベルは手付けでスクリプトからは作れない。MPSとCPUで計算順が変わりAPの下の桁が少しぶれることがある。
 
-- シードは全部42(`data_augment.py`、`split_train_val.py`、`train_resnet.py`)。同じ手順なら同じ分割と同じ学習になる。
-- パッケージの版は `uv.lock` で固定。
-- 固定しきれない部分もある。COCO 側の画像URLが将来変われば取得物が変わる。評価セットは上に書いたとおり手作りで、スクリプトからは作れない。MPS と CPU で計算順が変わり、APの下のほうの桁が少しぶれることはある。
+---
+
+## 用語集
+
+- **zero-shot** … 学習せず、ImageNet学習済みResNetをそのまま使う。
+- **FT（ファインチューニング）** … そのResNetを bus/other の2クラスに微調整する。
+- **フィルタ／劣化** … 学習データに本物っぽい劣化を加える加工（現行＝低解像度＋JPEG）。
+- **データ拡張(augmentation)** … 学習データの水増し。本物に似ているほど学習が効く。
+- **AP（PR-AUC）** … モデルの強さを0〜1の1数で表す。1.0が満点。
+- **FID** … 2つの画像群の特徴分布の距離。小さいほど似ている。フィルタが本物に近いかの判定に使う。
