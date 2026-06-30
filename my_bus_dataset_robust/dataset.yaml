@@ -1,4 +1,4 @@
-path: /Users/yooseiisikawa/sakuhin/IP/my_bus_dataset_robust
+path: ./my_bus_dataset_robust
 train: images/train
 val: images/train
 names:
