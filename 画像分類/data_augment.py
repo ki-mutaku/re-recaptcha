@@ -7,10 +7,11 @@ bus クラスと other クラスに「全く同じ」加工を適用すること
 （bus を素の昼間画像だけにすると、雨のバスを一度も学習できず誤判定する）
 """
 
+import io
 import os
 import random
 
-from PIL import Image, ImageEnhance, ImageDraw
+from PIL import Image, ImageEnhance, ImageDraw, ImageFilter
 
 # 加工結果を再現可能にするための乱数シード。
 # bus と other で同じ値を使うことで、毎回同じ条件のデータセットを作れる。
@@ -56,6 +57,42 @@ def make_rainy_noise_image(img):
             width=1,
         )
     return img_bad
+
+
+def make_recaptcha_like_image(img):
+    """
+    本物の reCAPTCHA 画像に寄せた劣化を合成する。
+
+    本物（nobodyPerfecZ/recaptchav2-29k）の bus 画像を観察すると、劣化は
+      - 100x100 低解像度由来のボケ・細部の潰れ
+      - JPEG ブロックノイズ
+      - 彩度・コントラストの低下
+    が主で、夜の暗さや雨だれの線は無い。よって make_night/make_rain とは別物として、
+    「縮小して戻す＋軽いボケ＋彩度低下＋JPEG再圧縮」で本物寄りの劣化を作る。
+
+    パラメータはランダム幅を持たせ、毎回少しずつ違う劣化を生成する。
+    """
+    img = img.convert("RGB")
+    w, h = img.size
+
+    # 1) 低解像度化: いったん小さくして元サイズへ戻し、細部を潰す
+    scale = random.uniform(0.3, 0.6)
+    small_w = max(1, int(w * scale))
+    small_h = max(1, int(h * scale))
+    img = img.resize((small_w, small_h), Image.BILINEAR).resize((w, h), Image.BILINEAR)
+
+    # 2) 軽いガウシアンぼかし
+    img = img.filter(ImageFilter.GaussianBlur(random.uniform(0.3, 1.0)))
+
+    # 3) 彩度・コントラストを少し落とす
+    img = ImageEnhance.Color(img).enhance(random.uniform(0.7, 1.0))
+    img = ImageEnhance.Contrast(img).enhance(random.uniform(0.8, 1.0))
+
+    # 4) JPEG 再圧縮（ブロックノイズ）— 本物のノイズ再現に一番効く
+    buffer = io.BytesIO()
+    img.save(buffer, format="JPEG", quality=random.randint(20, 40))
+    buffer.seek(0)
+    return Image.open(buffer).convert("RGB")
 
 
 def save_augmented_variants(img, save_dir, base_filename):

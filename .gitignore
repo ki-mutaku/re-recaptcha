@@ -224,3 +224,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# 本物reCAPTCHA画像（Google所有・再配布しない）
+/画像分類/real_recaptcha/
