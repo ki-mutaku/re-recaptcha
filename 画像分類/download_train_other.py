@@ -7,7 +7,7 @@ from io import BytesIO
 from PIL import Image
 
 # bus と全く同じ加工を使うため、共通モジュールから読み込む
-from data_augment import DEFAULT_SEED, save_augmented_variants
+from data_augment import DEFAULT_SEED, clean_stale_variants, save_augmented_variants
 
 # --- 設定 ---
 SAVE_DIR = "dataset/train/other"
@@ -30,6 +30,12 @@ def main():
     random.seed(DEFAULT_SEED)
 
     os.makedirs(SAVE_DIR, exist_ok=True)
+
+    # 旧フィルタの生成物（例: _night.jpg/_rain.jpg）が残っていると、現行フィルタの
+    # 生成分と混在して学習データが汚れるので、現行サフィックス以外は実行前に削除する
+    removed = clean_stale_variants(SAVE_DIR)
+    if removed:
+        print(f"【清掃】{SAVE_DIR} の旧フィルタ生成物を {removed} 枚削除しました。")
 
     if not os.path.exists(JSON_FILE):
         if not os.path.exists(ZIP_FILE):

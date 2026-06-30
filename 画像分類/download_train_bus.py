@@ -7,7 +7,7 @@ from io import BytesIO
 
 from PIL import Image
 
-from data_augment import DEFAULT_SEED, save_augmented_variants
+from data_augment import DEFAULT_SEED, clean_stale_variants, save_augmented_variants
 
 # --- 設定 ---
 SAVE_DIR = "dataset/train/bus"
@@ -25,18 +25,11 @@ def main():
 
     os.makedirs(SAVE_DIR, exist_ok=True)
 
-    # 加工なしの旧バス画像（{id}.jpg）が残っていると other と枚数・加工が揃わないので警告する
-    leftover = [
-        f
-        for f in os.listdir(SAVE_DIR)
-        if f.endswith(".jpg")
-        and not f.endswith(("_original.jpg", "_night.jpg", "_rain.jpg"))
-    ]
-    if leftover:
-        print(
-            f"【注意】{SAVE_DIR} に加工サフィックスの無い旧画像が {len(leftover)} 枚あります。\n"
-            "        other と条件を揃えるため、このフォルダを空にしてから実行し直すことを推奨します。"
-        )
+    # 旧フィルタの生成物（例: _night.jpg/_rain.jpg）が残っていると、現行フィルタの
+    # 生成分と混在して学習データが汚れるので、現行サフィックス以外は実行前に削除する
+    removed = clean_stale_variants(SAVE_DIR)
+    if removed:
+        print(f"【清掃】{SAVE_DIR} の旧フィルタ生成物を {removed} 枚削除しました。")
 
     if not os.path.exists(JSON_FILE):
         if not os.path.exists(ZIP_FILE):
@@ -94,7 +87,7 @@ def main():
         base_filename = f"bus_{img_meta['id']:012d}"
 
         # 3種すべて既に存在するならスキップ（再実行を速くする）
-        variants = [f"{base_filename}_original.jpg", f"{base_filename}_night.jpg", f"{base_filename}_rain.jpg"]
+        variants = [f"{base_filename}_original.jpg", f"{base_filename}_degraded1.jpg", f"{base_filename}_degraded2.jpg"]
         if all(os.path.exists(os.path.join(SAVE_DIR, v)) for v in variants):
             continue
 

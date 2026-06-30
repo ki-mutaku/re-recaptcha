@@ -3,6 +3,8 @@ import random
 import shutil
 from collections import defaultdict
 
+from data_augment import VARIANT_SUFFIXES
+
 # --- 設定 ---
 # データセットの大元フォルダ
 BASE_DIR = "dataset"
@@ -14,10 +16,9 @@ CLASSES = ["bus", "other"]
 
 # 検証用(val)に回す割合（20% = 0.2）
 VAL_RATIO = 0.2
-
-# 同じ元画像から作った加工バリエーションを表すサフィックス。
-# original/night/rain は同じ景色なので、train と val に分かれるとデータリークになる。
-VARIANT_SUFFIXES = ("_original.jpg", "_night.jpg", "_rain.jpg")
+# 同じ元画像から作った加工バリエーション（original/degraded1/degraded2）は同じ景色なので、
+# train と val に分かれるとデータリークになる。判定用のサフィックスは data_augment.py の
+# VARIANT_SUFFIXES と共通化している（download_train_*.py の清掃処理と基準を揃えるため）。
 # -----------
 
 
@@ -25,7 +26,7 @@ def base_key(filename):
     """
     加工バリエーションをまとめるためのキー（元画像ID部分）を返す。
 
-    例: "bus_000000012345_rain.jpg" -> "bus_000000012345"
+    例: "bus_000000012345_degraded1.jpg" -> "bus_000000012345"
     サフィックスが無いファイルは、その名前自体をキーにする。
     """
     for suffix in VARIANT_SUFFIXES:
