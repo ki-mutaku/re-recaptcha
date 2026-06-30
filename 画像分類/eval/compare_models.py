@@ -55,10 +55,15 @@ LABELS_DIR = Path(__file__).resolve().parent / "labels"
 FT_MODEL_PATH = REPO_ROOT / "best_resnet18_bus.pth"
 FT_CLASSES_PATH = REPO_ROOT / "best_resnet18_bus_classes.json"
 
-# 評価する2セット: (画像ディレクトリ, ラベルCSV, 表示名)
+# 評価する3セット: (画像ディレクトリ, ラベルCSV, 表示名)
 DATASETS = [
     (REPO_ROOT / "img", LABELS_DIR / "img_labels.csv", "晴れ (img)"),
     (REPO_ROOT / "img_bus_rain", LABELS_DIR / "img_bus_rain_labels.csv", "雨 (img_bus_rain)"),
+    (
+        REPO_ROOT / "画像分類" / "real_recaptcha",
+        LABELS_DIR / "real_recaptcha_labels.csv",
+        "本物 (real_recaptcha)",
+    ),
 ]
 
 DEFAULT_TARGET = "bus"
