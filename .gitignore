@@ -203,6 +203,14 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# プロジェクト固有の大容量データ・生成物（スクリプトで作り直せるためコミットしない）
+.DS_Store
+/dataset/
+/annotations/
+/annotations_trainval2017.zip
+/best_resnet18_bus.pth
+/best_resnet18_bus_classes.json
+
 # Ruff stuff:
 .ruff_cache/
 
@@ -216,3 +224,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# 本物reCAPTCHA画像（Google所有・再配布しない）
+/画像分類/real_recaptcha/

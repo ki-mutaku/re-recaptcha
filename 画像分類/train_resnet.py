@@ -5,16 +5,35 @@ from torchvision import datasets, models, transforms
 from torch.utils.data import DataLoader
 import os
 import copy
+import json
+import random
 import time
+
+import numpy as np
 
 # --- 設定 ---
 DATA_DIR = 'dataset'
 NUM_EPOCHS = 10         # 学習を繰り返す回数
 BATCH_SIZE = 32         # 1回にAIに見せる画像の枚数
 LEARNING_RATE = 0.0001   # 学習率（AIの学習スピード）
+SEED = 42               # 再現性のための乱数シード（毎回同じ結果にする）
 # -----------
 
+
+def set_seed(seed):
+    """
+    乱数シードを固定して学習結果を再現可能にする。
+
+    生ResNet vs FT後の比較を安定させるために、実行ごとのブレを無くす目的。
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+
 def main():
+    set_seed(SEED)
+
     # 1. デバイスの確認（MacのGPU「MPS」が使えるかチェック）
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     print(f"使用するデバイス: {device}\n")
@@ -37,7 +56,8 @@ def main():
     # 3. データセットとデータローダーの作成
     image_datasets = {x: datasets.ImageFolder(os.path.join(DATA_DIR, x), data_transforms[x]) 
                       for x in ['train', 'val']}
-    dataloaders = {x: DataLoader(image_datasets[x], batch_size=BATCH_SIZE, shuffle=True) 
+    # train はシャッフルするが、val は評価なので順序固定（結果を安定させる）
+    dataloaders = {x: DataLoader(image_datasets[x], batch_size=BATCH_SIZE, shuffle=(x == 'train'))
                    for x in ['train', 'val']}
     dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
     
@@ -63,7 +83,10 @@ def main():
     # 5. 学習ループ
     since = time.time()
     best_model_wts = copy.deepcopy(model.state_dict())
-    best_acc = 0.0
+    # ベストモデルは Accuracy ではなく bus の F1 で選ぶ。
+    # captcha用途では「busをどれだけ正しく拾えるか（再現率）」と
+    # 「busと言ったものが本当にbusか（適合率）」のバランスが重要なため。
+    best_f1 = 0.0
 
     print("\n学習を開始します...")
     for epoch in range(NUM_EPOCHS):
@@ -123,27 +146,38 @@ def main():
             if phase == 'val':
                 precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
                 recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-                
+                f1 = (2 * precision * recall / (precision + recall)
+                      if (precision + recall) > 0 else 0.0)
+
                 print(f'      └─ [Metrics] TP:{tp} FP:{fp} FN:{fn}')
                 print(f'      └─ 適合率(Precision): {precision:.4f}')
                 print(f'      └─ 再現率(Recall):    {recall:.4f}')
+                print(f'      └─ F1スコア:          {f1:.4f}')
 
-                if epoch_acc > best_acc:
-                    best_acc = epoch_acc
+                if f1 > best_f1:
+                    best_f1 = f1
                     best_model_wts = copy.deepcopy(model.state_dict())
-                    print("      ★ ベストモデルを更新しました！")
+                    print("      ★ ベストモデルを更新しました！(F1基準)")
 
     # 6. 学習完了とモデルの保存
     time_elapsed = time.time() - since
     print('-' * 30)
     print(f'学習完了! 所要時間: {time_elapsed // 60:.0f}分 {time_elapsed % 60:.0f}秒')
-    print(f'最高正解率 (Val Accuracy): {best_acc:4f}')
+    print(f'最高F1スコア (Val, bus): {best_f1:.4f}')
 
     # 最も成績の良かった重みをロードしてファイルに保存
     model.load_state_dict(best_model_wts)
     save_path = 'best_resnet18_bus.pth'
     torch.save(model.state_dict(), save_path)
     print(f'ベストモデルを "{save_path}" に保存しました。')
+
+    # 推論側（predict_recaptcha.py / 評価）が「どのインデックスがbusか」を
+    # 確実に復元できるよう、クラス名の並びをJSONで一緒に保存する。
+    # ImageFolderはクラスをアルファベット順に並べるため [bus, other] になる。
+    classes_path = 'best_resnet18_bus_classes.json'
+    with open(classes_path, 'w', encoding='utf-8') as f:
+        json.dump(class_names, f, ensure_ascii=False, indent=2)
+    print(f'クラス名の対応を "{classes_path}" に保存しました: {class_names}')
 
 if __name__ == '__main__':
     main()

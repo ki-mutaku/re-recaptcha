@@ -4,7 +4,10 @@ import urllib.request
 import zipfile
 import random
 from io import BytesIO
-from PIL import Image, ImageEnhance, ImageDraw
+from PIL import Image
+
+# bus と全く同じ加工を使うため、共通モジュールから読み込む
+from data_augment import DEFAULT_SEED, clean_stale_variants, save_augmented_variants
 
 # --- 設定 ---
 SAVE_DIR = "dataset/train/other"
@@ -21,32 +24,18 @@ ZIP_FILE = "annotations_trainval2017.zip"
 JSON_FILE = "annotations/instances_train2017.json"
 # -----------
 
-# --- 加工関数（バスの時と全く同じ条件にします） ---
-def make_night_image(img):
-    enhancer_brightness = ImageEnhance.Brightness(img)
-    img_night = enhancer_brightness.enhance(random.uniform(0.2, 0.4))
-    enhancer_contrast = ImageEnhance.Contrast(img_night)
-    img_night = enhancer_contrast.enhance(random.uniform(0.7, 0.9))
-    return img_night
-
-def make_rainy_noise_image(img):
-    enhancer_brightness = ImageEnhance.Brightness(img)
-    img_bad = enhancer_brightness.enhance(random.uniform(0.5, 0.8))
-    enhancer_contrast = ImageEnhance.Contrast(img_bad)
-    img_bad = enhancer_contrast.enhance(random.uniform(0.5, 0.8))
-    draw = ImageDraw.Draw(img_bad)
-    width, height = img.size
-    num_drops = int((width * height) * 0.01) 
-    for _ in range(num_drops):
-        x = random.randint(0, width)
-        y = random.randint(0, height)
-        length = random.randint(5, 20)
-        draw.line((x, y, x + random.randint(-2, 2), y + length), fill=(200, 200, 200), width=1)
-    return img_bad
-# ------------------------------------------------
 
 def main():
+    # bus と同じシードで加工を再現可能にする
+    random.seed(DEFAULT_SEED)
+
     os.makedirs(SAVE_DIR, exist_ok=True)
+
+    # 旧フィルタの生成物（例: _night.jpg/_rain.jpg）が残っていると、現行フィルタの
+    # 生成分と混在して学習データが汚れるので、現行サフィックス以外は実行前に削除する
+    removed = clean_stale_variants(SAVE_DIR)
+    if removed:
+        print(f"【清掃】{SAVE_DIR} の旧フィルタ生成物を {removed} 枚削除しました。")
 
     if not os.path.exists(JSON_FILE):
         if not os.path.exists(ZIP_FILE):
@@ -117,16 +106,8 @@ def main():
                 img_data = response.read()
             
             with Image.open(BytesIO(img_data)) as img:
-                img = img.convert('RGB')
-                
-                # パターン1: 原本
-                img.save(os.path.join(SAVE_DIR, f"{base_filename}_original.jpg"))
-                # パターン2: 夜
-                img_night = make_night_image(img.copy())
-                img_night.save(os.path.join(SAVE_DIR, f"{base_filename}_night.jpg"))
-                # パターン3: 雨・ノイズ
-                img_rain = make_rainy_noise_image(img.copy())
-                img_rain.save(os.path.join(SAVE_DIR, f"{base_filename}_rain.jpg"))
+                # bus と全く同じ加工（original / night / rain の3点）を適用する
+                save_augmented_variants(img, SAVE_DIR, base_filename)
 
             processed_count += 1
             if processed_count % 10 == 0:

@@ -78,8 +78,10 @@ def natural_sort_key(path):
 
 def collect_image_paths(image_dir):
     """
-    指定ディレクトリ直下にある画像ファイルをすべて取得する。
+    指定ディレクトリ以下にある画像ファイルをすべて取得する（サブディレクトリも含む）。
 
+    real_recaptcha/{bus,nonbus}/ のようにクラスごとサブディレクトリに
+    分かれているデータセットも1回の呼び出しで扱えるようにするため再帰的に探す。
     reCAPTCHAのタイル番号と出力インデックスが対応しやすいように、
     ファイル名は自然順で並べる。
     """
@@ -88,7 +90,7 @@ def collect_image_paths(image_dir):
     return sorted(
         (
             path
-            for path in image_dir_path.iterdir()
+            for path in image_dir_path.rglob("*")
             if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
         ),
         key=natural_sort_key,
