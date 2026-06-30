@@ -8,102 +8,55 @@
 ---
 # 2026-06-30
 
-## いまやっていること：本物 reCAPTCHA データセットの導入を検討
+テーマ：**前回突かれた「劣化フィルタは妥当なのか？」に、本物データで決着をつける。**
+本物 reCAPTCHA データセット（`nobodyPerfecZ/recaptchav2-29k`）を見つけて導入した。
 
-### きっかけ
-本物の reCAPTCHA データセットを HuggingFace で見つけた。
-- `nobodyPerfecZ/recaptchav2-29k`
-- https://huggingface.co/datasets/nobodyPerfecZ/recaptchav2-29k
+## やったこと
 
-### データセットの実態（確認済み）
-- **本物の reCAPTCHA v2 デモページからスクレイピングした実画像**（合成ではない）
-- 29,568枚 / **100×100px** / RGB PNG / 手作業ラベル
-- クラス: bicycle, **bus**, car, **crosswalk**, **hydrant**
-- 難易度を上げるための**視覚ノイズ・歪みが意図的に入っている** ← 前回知りたかった「本物の劣化」そのもの
-- ライセンス: MIT。ただし画像は Google 所有、**非営利・教育・研究目的に限定**。Google非公式。
+1. **本物データセットを導入**（HuggingFace `nobodyPerfecZ/recaptchav2-29k`）
+   - 実際の reCAPTCHA v2 から取った実画像 29,568枚・100×100・マルチラベル。**bus = ラベル列1**。
+   - 目視確認 → スクールバス・低解像度・JPEGノイズあり。**雨だれ線/夜の暗さは無い** → 旧フィルタが的外れと判明。
+   - `eval/download_real_recaptcha.py` でDL→ `real_recaptcha/{bus,nonbus}/` に保存（**git管理外**）。
+2. **劣化フィルタを本物寄りに作り直した**（`data_augment.py`）
+   - 旧 `make_night_image`/`make_rainy_noise_image`（暗く＋白線）→ 新 `make_recaptcha_like_image`（**低解像度化＋ぼかし＋彩度低下＋JPEG低品質再圧縮**）。
+   - 学習データ生成（`save_augmented_variants`）は新フィルタ一本に。旧関数は比較用に残置。
+   - サフィックスを `_night/_rain` → `_degraded1/_degraded2` に変更（`split_train_val.py`・`download_train_*.py` も追従）。
+3. **フィルタ妥当性を FID で定量評価**（`eval/filter_validity.py`）
+   - クリーン bus に各フィルタをかけ、本物 bus 6,693枚との **FID**（小=本物に近い＝妥当）を比較。
 
-### 3つの問いへの結論
-1. **使っていいか** → 研究/教育目的なのでOK。発表・READMEに「出典・Google非公式・画像はGoogle所有・CAPTCHA突破は目的としない」を明記。リポジトリに画像実体は再コミットしない（DLスクリプト or .gitignore）。
-2. **どこで使うか**
-   - 【本命A】**本物の評価セット**として `compare_models.py` の評価データに採用（いまの img_bus_rain は自前収集なので、これに置き換え/追加で正直な数字になる）。
-   - 【本命B】**フィルタ妥当性の判定基準**として使う（下記③）。
-   - 学習に使うなら **train/test を画像ID単位で厳密分割**（リーク対策）。評価分は学習に混ぜない。
-   - **NG**: 自作の夜・雨フィルタに混ぜない。本物アンカーとして別管理。
-3. **フィルタ妥当性の検証方法**
-   - 妥当性 = 合成劣化（夜・雨フィルタ）が本物の劣化分布にどれだけ近いか。
-   - (A) 定性: 本物100×100と自作フィルタを並べて違いを言語化（本物=低解像度ボケ/JPEGブロック、自作=暗く+白線で細部は残る、の予想）。
-   - (B) 定量（簡単な順）:
-     1. **タスク性能**: 合成で学習→本物でテスト。本物テストのAP/F1が上がるフィルタほど妥当。← 一番実用的で本命。
-     2. **ドメイン分類器**: 「本物vs合成」を見分ける2値分類器。AUC≈0.5に近いほど似ている。
-     3. **特徴量分布距離**: ResNet埋め込みで本物群と合成群の距離（FID/MMD的）。小さいほど近い。
-   - 進め方: (A)で当たり→(B)-1で本物テスト、が最小手数で効く。
+   | フィルタ | FID(↓近い) | clean比 | 判定 |
+   |---|---|---|---|
+   | clean | 206.7 | 基準 | — |
+   | old_night | 179.2 | +27.5 | 少し近づく |
+   | **old_rain（白線）** | **381.5** | **−174.8** | **逆効果** |
+   | **new（低解像度＋JPEG）** | **164.5** | **+42.2** | **最も近い=妥当** |
 
-### データセット詳細（確認済み・2026-06-30 追記）
-- features: `image`(100x100 RGB) と `labels`（5次元 multi-hot のマルチラベル）
-- 列インデックス: **0=bicycle, 1=bus, 2=car, 3=crosswalk, 4=hydrant**（本人提供の表で確定）
-  - bus=index1。bus は約5,025枚
-- split: train 23,654 / validation 2,957 / test 2,957、DLサイズ約620MB
-- 本物bus画像を目視確認 → スクールバス・低解像度・JPEGノイズあり、雨だれ線/夜暗は無し
+4. **(B)-1 タスク転移を実証**（`eval/compare_models.py` に本物セットを追加）
+   - 新フィルタのみで学習し直し、zero-shot vs FT を3データセットで比較。
 
-### 本物画像から決めたフィルタ方針
-- 旧フィルタ（暗く＋白線/夜暗）は劣化の種類が本物と違う → 妥当でない見込み
-- 新フィルタ = **低解像度化(縮小→戻す)＋軽いぼかし＋彩度低下＋JPEG低品質再圧縮**
-- JPEG再圧縮が本物のブロックノイズ再現に一番効く
+   | 評価データ | 正例/負例 | zero-shot AP | fine-tuned AP | 差 |
+   |---|---|---|---|---|
+   | 晴れ (img) | 11/99 | 1.000 | 0.984 | -0.016 |
+   | 雨 (img_bus_rain) | 50/52 | 0.978 | 0.946 | -0.032 |
+   | **本物 (real_recaptcha)** | 6693/6693 | **0.875** | **0.911** | **+0.036** |
 
-### 実装したもの（この回）
-- `画像分類/eval/download_real_recaptcha.py`：本物をDLし bus/nonbus に書き出し。保存先 `画像分類/real_recaptcha/`（**.gitignore済=git管理外、再配布しない**）
-- `画像分類/data_augment.py`：`make_recaptcha_like_image()` を追加（旧 night/rain は比較用に残す）
-- `画像分類/eval/filter_validity.py`：妥当性の定量評価スクリプト
-  - 指標1 **FID**（ResNet18特徴の分布距離。本物に近いほど小=妥当）
-  - 指標2 **ドメイン分類器AUC**（本物vs合成を見分ける。0.5に近いほど似てる=妥当）
-  - clean / old_night / old_rain / new を本物bus と比較し、clean基準で「近づいたか」を判定
+5. **一括実行スクリプト `main.py` を整備** … データ生成→分割→学習→本物DL→妥当性評価（`--from-step`/`--force`）。
+6. **整理**：`ex_train_bus.py` を `未使用/` へ移動。`README.md` を現状に合わせてマニュアル化。
 
-### TODO（このテーマ）
-- [x] データセットDL・配置スクリプト用意（git管理外）
-- [x] bus 画像を目視（低解像度・JPEGノイズ確認）
-- [x] 新フィルタ実装
-- [x] 妥当性の定量評価スクリプト実装
-- [x] 本物DL完了（bus/nonbus 各600枚）→ `filter_validity.py` 実行
-- [x] 結果から「旧フィルタ(白線)は逆効果/新フィルタは妥当」を数字で確認
+## 振り返り
 
-### 定量結果（2026-06-30 実行）`eval/results/filter_validity.csv`
-本物bus 600枚に対する各劣化の FID（小さいほど本物に近い＝妥当）:
+- **問いに答えられた**：「フィルタは妥当か？」→ FIDで「新フィルタが本物に最も近い／旧フィルタの白線は逆効果」と**数字で**示せた。発表で一番強いポイント。
+- **本物だけ FT が逆転**：合成（晴れ・雨）では zero-shot が勝つのに、本物では FT が +0.036 で上回る。「本物寄りフィルタで学習したことが転移性能を上げた」証拠で、FID評価とも整合。きれいな筋になった。
+- **ハマったバグ**：フィルタ切替時に旧サフィックスのファイルが残って新生成分と混在したまま一度学習してしまった。`clean_stale_variants()`（現行サフィックス以外を実行前に自動削除）で解消し、`dataset/`・モデルを消してクリーン再生成・再学習。→ 教訓：生成物の命名を変えたら古い生成物の掃除をセットで入れる。
+- **限界**：学習データが少ない（100ベース×3＝各300枚、bus val F1≈0.86）ので差は小さめ。domainAUC は被写体ギャップで≈1.0飽和（FIDの相対比較で代替）。
 
-| group | FID(↓近い) | clean比 | 判定 |
-|---|---|---|---|
-| clean（劣化なし） | 209.3 | 基準 | — |
-| old_night（暗く） | 182.5 | +26.7 | 少し近づく |
-| **old_rain（暗く＋白線）** | **386.6** | **−177.3** | **逆効果** |
-| **new（低解像度＋ぼけ＋JPEG）** | **165.0** | **+44.3** | **最も近い=妥当** |
+## 次回のTODO
 
-- 結論: **新フィルタが本物に最も近い**。方針（低解像度＋JPEG再圧縮）が定量的に裏付けられた。
-- **旧フィルタの白線は逆効果**＝本物に無い線を足すのでFIDが大幅悪化。「白線は妥当でない」を数字で提示できる。
-- 注意: domainAUC は全グループ≈1.0で飽和。劣化の差だけでなく**被写体の差**（COCO街並みbus vs reCAPTCHA切り抜きタイル）も含むため、どの合成も本物と見分けはつく。FIDの相対比較（同じクリーンに劣化だけ変える）は劣化妥当性の比較として有効。絶対値の大きさは被写体ギャップでフィルタでは埋まらない。
-- [x] (B)-1: 新フィルタで学習→本物テスト、本物APが上がるか（タスク転移で実証）
-- [x] 本物 bus を評価セット化し `compare_models.py` で zero-shot/FT 再評価
-- [ ] README/発表用に「出典・ライセンス・倫理注意」を明記
-
-### 学習データ生成を新フィルタ一本化、本物データで(B)-1を実証（同日追記）
-
-**やったこと**
-- `data_augment.py` の `save_augmented_variants()` を旧フィルタ（`make_night_image`/`make_rainy_noise_image`）から新フィルタ `make_recaptcha_like_image()` 一本に変更。旧フィルタ関数自体は `filter_validity.py` の比較用に残す。
-- ファイル名サフィックスを `_night.jpg`/`_rain.jpg` → `_degraded1.jpg`/`_degraded2.jpg` に変更（`split_train_val.py`・`download_train_bus.py` も追従）。
-- `download_train_bus.py`・`download_train_other.py`・`eval/download_real_recaptcha.py`・`train_resnet.py`・`split_train_val.py`・`eval/download_real_recaptcha.py`→`filter_validity.py` を一括実行する `main.py` を整備（`--from-step`/`--force`で部分再実行可）。
-- 本物 reCAPTCHA画像（`real_recaptcha/bus,nonbus` 各6693枚）を `eval/make_real_recaptcha_labels.py` でラベルCSV化し、`compare_models.py` の評価データセットに追加。`classification.py` の `collect_image_paths()` をサブディレクトリ対応（`rglob`）に変更。
-
-**ハマった点（バグ）**: フィルタ切替時にサフィックス不一致のファイルを消す処理が無く、`dataset/train/{bus,other}/` に旧サフィックス（`_night`/`_rain`）と新サフィックス（`_degraded1/2`）が混在した状態で一度学習してしまった。`data_augment.py` に `VARIANT_SUFFIXES` と `clean_stale_variants()` を追加し、`download_train_bus.py`/`download_train_other.py` の実行時に現行サフィックス以外を自動削除するようにして解消。`dataset/`・モデルを削除して `main.py` でクリーンに再生成・再学習した。
-
-**(B)-1の結果（クリーン版、新フィルタのみで学習）**: `eval/results/zeroshot_vs_ft_比較.md`
-
-| 評価データ | zero-shot AP | fine-tuned AP | 差 |
-|---|---|---|---|
-| 晴れ (img) | 1.000 | 0.984 | -0.016 |
-| 雨 (img_bus_rain) | 0.978 | 0.946 | -0.032 |
-| **本物 (real_recaptcha, 13386枚)** | **0.875** | **0.911** | **+0.036** |
-
-- 合成データ（晴れ・雨）では一貫して zero-shot が勝つのに、**本物だけ FT が逆転で上回る**（旧フィルタ混在時は+0.065、クリーン後は+0.036とやや縮小したが傾向は同じ）。
-- これは「新フィルタで学習したことが本物への転移性能を実際に上げている」というタスク転移の実証であり、(B)-1のTODOに対する答え。FIDでの妥当性評価（新フィルタが本物に最も近い）と整合する結果。
-- 学習データは100ベース画像×3バリエーション(bus/other各300枚)と少なく、F1=0.857（bus, val）。サンプル数を増やせば差がもっとはっきりする可能性あり。
+- [ ] **9マス本番デモを今の流れに繋ぐ**：ルートの `split_recaptcha.py`（画像を3×3に分割→`test_images/tile_*.jpg`）＋ `画像分類/predict_recaptcha.py`（FTモデルで各マスを bus/other 判定）が既にある。本物 reCAPTCHA を9分割→マスごと判定するデモとして整え、発表で「本番っぽい絵」を見せられるか試す。
+- [ ] 学習データを増やす（ベース画像を100→数百）と FT の差がはっきりするか検証。
+- [ ] 「bus は zero-shot で十分。FTの効きを見せたいなら ImageNet に無い/弱いお題（消火栓・横断歩道・階段）」を発表で使うか検討。
+- [ ] 本物セットを学習にも使う案（その場合 train/test を画像ID単位で厳密分割。評価分は混ぜない）。
+- [ ] 発表資料に「データセット出典・ライセンス・倫理注意」を明記（README §8 に記載済み、流用する）。
 
 ---
 ---
