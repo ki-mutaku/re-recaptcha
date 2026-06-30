@@ -1,5 +1,7 @@
 
 新しい日付を一番上に足していく。
+進捗を都度記入
+手動でpush
 
 ---
 ---
@@ -77,9 +79,31 @@
 - 結論: **新フィルタが本物に最も近い**。方針（低解像度＋JPEG再圧縮）が定量的に裏付けられた。
 - **旧フィルタの白線は逆効果**＝本物に無い線を足すのでFIDが大幅悪化。「白線は妥当でない」を数字で提示できる。
 - 注意: domainAUC は全グループ≈1.0で飽和。劣化の差だけでなく**被写体の差**（COCO街並みbus vs reCAPTCHA切り抜きタイル）も含むため、どの合成も本物と見分けはつく。FIDの相対比較（同じクリーンに劣化だけ変える）は劣化妥当性の比較として有効。絶対値の大きさは被写体ギャップでフィルタでは埋まらない。
-- [ ] (B)-1: 新フィルタで学習→本物テスト、本物APが上がるか（タスク転移で実証）
-- [ ] 本物 bus を評価セット化し `compare_models.py` で zero-shot/FT 再評価
+- [x] (B)-1: 新フィルタで学習→本物テスト、本物APが上がるか（タスク転移で実証）
+- [x] 本物 bus を評価セット化し `compare_models.py` で zero-shot/FT 再評価
 - [ ] README/発表用に「出典・ライセンス・倫理注意」を明記
+
+### 学習データ生成を新フィルタ一本化、本物データで(B)-1を実証（同日追記）
+
+**やったこと**
+- `data_augment.py` の `save_augmented_variants()` を旧フィルタ（`make_night_image`/`make_rainy_noise_image`）から新フィルタ `make_recaptcha_like_image()` 一本に変更。旧フィルタ関数自体は `filter_validity.py` の比較用に残す。
+- ファイル名サフィックスを `_night.jpg`/`_rain.jpg` → `_degraded1.jpg`/`_degraded2.jpg` に変更（`split_train_val.py`・`download_train_bus.py` も追従）。
+- `download_train_bus.py`・`download_train_other.py`・`eval/download_real_recaptcha.py`・`train_resnet.py`・`split_train_val.py`・`eval/download_real_recaptcha.py`→`filter_validity.py` を一括実行する `main.py` を整備（`--from-step`/`--force`で部分再実行可）。
+- 本物 reCAPTCHA画像（`real_recaptcha/bus,nonbus` 各6693枚）を `eval/make_real_recaptcha_labels.py` でラベルCSV化し、`compare_models.py` の評価データセットに追加。`classification.py` の `collect_image_paths()` をサブディレクトリ対応（`rglob`）に変更。
+
+**ハマった点（バグ）**: フィルタ切替時にサフィックス不一致のファイルを消す処理が無く、`dataset/train/{bus,other}/` に旧サフィックス（`_night`/`_rain`）と新サフィックス（`_degraded1/2`）が混在した状態で一度学習してしまった。`data_augment.py` に `VARIANT_SUFFIXES` と `clean_stale_variants()` を追加し、`download_train_bus.py`/`download_train_other.py` の実行時に現行サフィックス以外を自動削除するようにして解消。`dataset/`・モデルを削除して `main.py` でクリーンに再生成・再学習した。
+
+**(B)-1の結果（クリーン版、新フィルタのみで学習）**: `eval/results/zeroshot_vs_ft_比較.md`
+
+| 評価データ | zero-shot AP | fine-tuned AP | 差 |
+|---|---|---|---|
+| 晴れ (img) | 1.000 | 0.984 | -0.016 |
+| 雨 (img_bus_rain) | 0.978 | 0.946 | -0.032 |
+| **本物 (real_recaptcha, 13386枚)** | **0.875** | **0.911** | **+0.036** |
+
+- 合成データ（晴れ・雨）では一貫して zero-shot が勝つのに、**本物だけ FT が逆転で上回る**（旧フィルタ混在時は+0.065、クリーン後は+0.036とやや縮小したが傾向は同じ）。
+- これは「新フィルタで学習したことが本物への転移性能を実際に上げている」というタスク転移の実証であり、(B)-1のTODOに対する答え。FIDでの妥当性評価（新フィルタが本物に最も近い）と整合する結果。
+- 学習データは100ベース画像×3バリエーション(bus/other各300枚)と少なく、F1=0.857（bus, val）。サンプル数を増やせば差がもっとはっきりする可能性あり。
 
 ---
 ---
