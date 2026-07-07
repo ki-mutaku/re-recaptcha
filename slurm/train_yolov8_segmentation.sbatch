@@ -10,19 +10,25 @@
 
 set -euo pipefail
 
-# Adjust these module names to match the department server.
-module purge
-module load singularity
+if command -v apptainer >/dev/null 2>&1; then
+    RUNTIME=apptainer
+elif command -v singularity >/dev/null 2>&1; then
+    RUNTIME=singularity
+else
+    echo "apptainer/singularity が見つかりません" >&2
+    exit 1
+fi
 
 PROJECT_DIR="${SLURM_SUBMIT_DIR}"
 IMAGE="${PROJECT_DIR}/re-recaptcha.sif"
 
+cd "${PROJECT_DIR}"
 mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/runs" "${PROJECT_DIR}/.cache/matplotlib" "${PROJECT_DIR}/.cache/ultralytics"
 
 export SINGULARITYENV_MPLCONFIGDIR=/workspace/.cache/matplotlib
 export SINGULARITYENV_YOLO_CONFIG_DIR=/workspace/.cache/ultralytics
 
-singularity exec --nv --cleanenv \
+"${RUNTIME}" exec --nv --cleanenv \
     --bind "${PROJECT_DIR}:/workspace" \
     --pwd /workspace \
     "${IMAGE}" \

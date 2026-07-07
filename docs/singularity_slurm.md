@@ -71,9 +71,9 @@ tail -f recaptcha-cls-<jobid>.out
 
 - `#SBATCH --partition=gpu`: 学科サーバーの GPU partition 名に変更する。
 - `#SBATCH --gres=gpu:1`: GPU 数を変える。CPU ジョブなら削る。
-- `module load singularity`: サーバーでの module 名に変更する。例: `module load apptainer`
 - `#SBATCH --mem=...`: データ量とバッチサイズに合わせて増減する。
 - `--batch 16`: GPU メモリ不足なら `8`, `4`, `2` に下げる。
+- `apptainer` が PATH にあればそれを使い、無ければ `singularity` に落ちるので、`module` は必須ではない。
 
 ## 5. 注意点
 
