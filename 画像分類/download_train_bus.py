@@ -11,7 +11,7 @@ from data_augment import DEFAULT_SEED, clean_stale_variants, save_augmented_vari
 
 # --- 設定 ---
 SAVE_DIR = "dataset/train/bus"
-MAX_BASE_IMAGES = 100  # 集めるベース画像の枚数（3パターン加工で合計300枚になります）
+MAX_BASE_IMAGES = 300  # 集めるベース画像の枚数（3パターン加工で合計900枚になります）
 MIN_AREA_RATIO = 0.1  # バスの面積が画像全体の10%以上あるものだけを採用する（0.1 = 10%）
 ANNOTATION_URL = "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
 ZIP_FILE = "annotations_trainval2017.zip"

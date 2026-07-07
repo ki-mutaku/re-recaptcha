@@ -11,7 +11,7 @@ from data_augment import DEFAULT_SEED, clean_stale_variants, save_augmented_vari
 
 # --- 設定 ---
 SAVE_DIR = "dataset/train/other"
-MAX_BASE_IMAGES = 100  # 集めるベース画像の枚数（3パターン加工で合計300枚になります）
+MAX_BASE_IMAGES = 300  # 集めるベース画像の枚数（3パターン加工で合計900枚になります）
 
 # 集めたい「バス以外」のカテゴリ設定
 # 1. バスに似ているハードネガティブ（全体の約半分をこれにします）
