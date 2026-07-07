@@ -210,6 +210,8 @@ tempCodeRunnerFile.py
 /annotations_trainval2017.zip
 /best_resnet18_bus.pth
 /best_resnet18_bus_classes.json
+/best_resnet18_bus_ablation_*.pth
+/dataset_ablation/
 
 # Ruff stuff:
 .ruff_cache/
