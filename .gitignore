@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# YOLO / ML training outputs
+runs/
+yolov8_segmentation_runs/
+src/yolo_dataset/
+
+# Model weights
+*.pt

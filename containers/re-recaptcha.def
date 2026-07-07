@@ -1,0 +1,60 @@
+Bootstrap: docker
+From: pytorch/pytorch:2.11.0-cuda12.8-cudnn9-runtime
+
+%labels
+    Author re-recaptcha
+    Description Python/PyTorch environment for re-recaptcha experiments
+
+%environment
+    export PYTHONUNBUFFERED=1
+    export PIP_NO_CACHE_DIR=1
+    export TORCH_HOME=/opt/torch-cache
+    export MPLCONFIGDIR=/tmp/matplotlib
+    export YOLO_CONFIG_DIR=/tmp/ultralytics
+
+%post
+    set -eu
+
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        git \
+        libgl1 \
+        libglib2.0-0 \
+        libgomp1
+    rm -rf /var/lib/apt/lists/*
+
+    python -m pip install --upgrade pip
+
+    # Torch/TorchVision are provided by the PyTorch CUDA base image.
+    # Keep the project-specific direct dependencies pinned to pyproject/uv.lock.
+    python -m pip install \
+        "grad-cam==1.5.5" \
+        "matplotlib==3.10.9" \
+        "numpy==2.4.4" \
+        "opencv-python==4.13.0.92" \
+        "pillow==12.2.0" \
+        "ultralytics==8.4.75"
+
+    mkdir -p /opt/torch-cache
+
+    # Pre-download ResNet18 weights so compute nodes do not need internet access.
+    TORCH_HOME=/opt/torch-cache python - <<'PY'
+from torchvision.models import ResNet18_Weights, resnet18
+
+resnet18(weights=ResNet18_Weights.DEFAULT)
+PY
+    chmod -R a+rX /opt/torch-cache
+
+    python - <<'PY'
+import torch
+import torchvision
+import ultralytics
+
+print("torch", torch.__version__)
+print("torchvision", torchvision.__version__)
+print("cuda_available_at_build", torch.cuda.is_available())
+print("ultralytics", ultralytics.__version__)
+PY
+
+%runscript
+    exec python "$@"
