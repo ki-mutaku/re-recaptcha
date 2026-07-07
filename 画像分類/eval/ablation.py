@@ -3,10 +3,10 @@
 
 - 役割: 学習用データの劣化条件を変えた3つの条件でモデルを学習し、
         同じ real_recaptcha で AP を比較して、新フィルタの有効性を因果として検証する。
-- 条件:
-  - A: clean (原本のみ、100枚/クラス) -> 新規学習 (best_resnet18_bus_ablation_clean.pth)
-  - B: old_filter (原本＋旧夜＋旧雨、300枚/クラス) -> 新規学習 (best_resnet18_bus_ablation_oldfilter.pth)
-  - C: new_filter (原本＋新degraded1＋新degraded2、300枚/クラス) -> 既存モデル (best_resnet18_bus.pth) を流用
+- 条件（すべて同一の原本100枚/クラスから、フィルタだけ変えて新規学習）:
+  - A: clean (原本のみ、100枚/クラス) -> best_resnet18_bus_ablation_clean.pth
+  - B: old_filter (原本＋旧夜＋旧雨、300枚/クラス) -> best_resnet18_bus_ablation_oldfilter.pth
+  - C: new_filter (原本＋新degraded1＋新degraded2、300枚/クラス) -> best_resnet18_bus_ablation_newfilter.pth
 - 評価データ:
   - real_recaptcha (本物画像、正例6693/負例6693)
 - 出力:
@@ -34,7 +34,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from data_augment import make_night_image, make_rainy_noise_image
+from data_augment import make_night_image, make_rainy_noise_image, make_recaptcha_like_image
 from classification import collect_image_paths
 from evaluate import load_labels, match_labels_to_paths
 
@@ -79,7 +79,7 @@ def prepare_ablation_datasets():
     phases = ["train", "val"]
     
     # Ablation フォルダの作成
-    for cond in ["clean", "old_filter"]:
+    for cond in ["clean", "old_filter", "new_filter"]:
         for phase in phases:
             for cls in classes:
                 os.makedirs(ABLATION_DIR / cond / phase / cls, exist_ok=True)
@@ -111,15 +111,24 @@ def prepare_ablation_datasets():
                 old_dest_orig = ABLATION_DIR / "old_filter" / phase / cls / fname
                 shutil.copy(src_path, old_dest_orig)
                 
-                # 夜・雨画像を生成して保存
+                # --- 条件 C: new_filter (原本 + 新劣化2種) ---
+                new_dest_orig = ABLATION_DIR / "new_filter" / phase / cls / fname
+                shutil.copy(src_path, new_dest_orig)
+
+                # 夜・雨画像（旧）と 新劣化2種を生成して保存
                 with Image.open(src_path).convert("RGB") as img:
-                    # 夜画像
+                    # 旧: 夜画像
                     night_img = make_night_image(img.copy())
                     night_img.save(ABLATION_DIR / "old_filter" / phase / cls / f"{base_name}_night.jpg")
-                    # 雨画像
+                    # 旧: 雨画像
                     rain_img = make_rainy_noise_image(img.copy())
                     rain_img.save(ABLATION_DIR / "old_filter" / phase / cls / f"{base_name}_rain.jpg")
-                    
+                    # 新: 低解像度＋JPEG 劣化 2バリエーション（旧と同じく原本1枚から2枚に水増し）
+                    make_recaptcha_like_image(img.copy()).save(
+                        ABLATION_DIR / "new_filter" / phase / cls / f"{base_name}_degraded1.jpg")
+                    make_recaptcha_like_image(img.copy()).save(
+                        ABLATION_DIR / "new_filter" / phase / cls / f"{base_name}_degraded2.jpg")
+
     print("Ablation datasets preparation complete.")
 
 def train_resnet_model(data_dir, output_model_path, device):
@@ -269,32 +278,36 @@ def main():
     # 保存モデルパスの定義
     clean_model_path = REPO_ROOT / "best_resnet18_bus_ablation_clean.pth"
     oldfilter_model_path = REPO_ROOT / "best_resnet18_bus_ablation_oldfilter.pth"
-    
+    newfilter_model_path = REPO_ROOT / "best_resnet18_bus_ablation_newfilter.pth"
+
     # 1. 条件 A (clean) の学習
     if not clean_model_path.exists():
         train_resnet_model(ABLATION_DIR / "clean", clean_model_path, device)
     else:
         print(f"\n[skip] Clean model already exists at {clean_model_path}")
-        
+
     # 2. 条件 B (old_filter) の学習
     if not oldfilter_model_path.exists():
         train_resnet_model(ABLATION_DIR / "old_filter", oldfilter_model_path, device)
     else:
         print(f"\n[skip] Old filter model already exists at {oldfilter_model_path}")
-        
-    # 3. 3条件の AP 評価
+
+    # 3. 条件 C (new_filter) の学習 — 同一の原本から新フィルタで学習し直す（旧モデル流用はしない）
+    if not newfilter_model_path.exists():
+        train_resnet_model(ABLATION_DIR / "new_filter", newfilter_model_path, device)
+    else:
+        print(f"\n[skip] New filter model already exists at {newfilter_model_path}")
+
+    # 4. 3条件の AP 評価
     print("\n[Evaluation] Evaluating models on real_recaptcha...")
-    
+
     ap_clean = evaluate_model_on_real(clean_model_path, device)
     print(f"  Condition A (clean) AP: {ap_clean:.4f}")
-    
+
     ap_old = evaluate_model_on_real(oldfilter_model_path, device)
     print(f"  Condition B (old_filter) AP: {ap_old:.4f}")
-    
-    if not EXISTING_FT_MODEL_PATH.exists():
-        print(f"Error: Existing fine-tuned model not found at {EXISTING_FT_MODEL_PATH}")
-        sys.exit(1)
-    ap_new = evaluate_model_on_real(EXISTING_FT_MODEL_PATH, device)
+
+    ap_new = evaluate_model_on_real(newfilter_model_path, device)
     print(f"  Condition C (new_filter) AP: {ap_new:.4f}")
     
     # レポート生成
@@ -311,14 +324,19 @@ def main():
     
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("# 劣化フィルタのアブレーション実験評価結果\n\n")
-        f.write("学習データの劣化条件を変えた3モデルにおける、本物 reCAPTCHA 画像での精度(AP)比較結果。\n\n")
+        f.write("同一の原本画像（100枚/クラス）から、学習データの劣化条件だけを変えた3モデルを"
+                "**すべて新規学習**し、本物 reCAPTCHA 画像での精度(AP)を比較した。"
+                "3条件とも同一マシン・同一シード(42)で学習しているため、フィルタ以外の条件は揃っている。\n\n")
         f.write("| 学習条件 | 学習データ | 枚数/クラス | real_recaptcha AP | 参考: zero-shot AP (0.875) との差 |\n")
         f.write("|---|---|---:|---:|---:|\n")
         f.write(f"| A: clean | 原本のみ | 100 | {ap_clean:.3f} | {diff_clean:+.3f} |\n")
         f.write(f"| B: 旧フィルタ | 原本＋夜＋雨 | 300 | {ap_old:.3f} | {diff_old:+.3f} |\n")
         f.write(f"| C: 新フィルタ | 原本＋degraded1＋degraded2 | 300 | {ap_new:.3f} | {diff_new:+.3f} |\n\n")
         f.write("> [!NOTE]\n")
-        f.write("> 条件Aは学習枚数が100枚/クラスと少なく、B・C（300枚/クラス）との比較において「データ総枚数」の違いが含まれることに注意。\n")
+        f.write("> - 条件Aは原本のみ（100枚）、B・Cは劣化2種で水増し（300枚）。A対B/CはフィルタありなしとともにデータN数の差も含む。\n")
+        f.write("> - B対Cは原本もN数も揃っており、差はフィルタの種類のみに由来する。\n")
+        f.write("> - シングルシード1本での結果。学習の乱数由来のばらつき（同条件でも±0.01〜0.015程度）があるため、"
+                "B対Cの小さな差の解釈には複数シードでの再現が必要。\n")
         
     print(f"\nSaved Ablation Markdown report to: {md_path}")
     print("Ablation study evaluation completed successfully.")
