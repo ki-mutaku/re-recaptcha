@@ -224,3 +224,32 @@ src/yolo_dataset/
 
 # Model weights
 *.pt
+*.pth
+*.onnx
+*.engine
+*.ckpt
+
+# OS / local editor artifacts
+.DS_Store
+**/.DS_Store
+
+# Local/generated experiment datasets and labels
+# Keep canonical small configs/docs in git, but do not add new generated image/label dumps by default.
+dataset/
+test_images/
+my_recaptcha_dataset/
+img/
+busbus/
+img_bus_rain/
+src/my_recaptcha_dataset/data/
+src/test_images_fog/
+src/test_images_mosaic/
+src/labels_fog/
+src/labels_mosaic/
+
+# Downloaded COCO artifacts
+annotations/
+annotations_trainval2017.zip
+
+# Ad-hoc visual outputs
+tracking*.png
