@@ -6,8 +6,9 @@ from pathlib import Path
 from ultralytics import YOLO
 
 def setup_dataset():
-    # スクリプトがあるディレクトリを基準とする相対パス
-    base_dir = Path(__file__).resolve().parent
+    # src直下の生成データを基準に、セグメンテーション用データセットを組み立てる。
+    # このファイルは src/segmentation/ 配下にあるため、parents[1] が src ディレクトリになる。
+    base_dir = Path(__file__).resolve().parents[1]
     
     # 元データのパス（画像と生成したラベル）
     src_dirs = [

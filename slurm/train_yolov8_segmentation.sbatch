@@ -32,7 +32,7 @@ export SINGULARITYENV_YOLO_CONFIG_DIR=/workspace/.cache/ultralytics
     --bind "${PROJECT_DIR}:/workspace" \
     --pwd /workspace \
     "${IMAGE}" \
-    python src/train_yolov8_segmentation.py \
+    python src/segmentation/train_yolov8_segmentation.py \
         --model yolov8n-seg.pt \
         --epochs 50 \
         --imgsz 640 \

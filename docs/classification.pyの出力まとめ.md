@@ -1,11 +1,11 @@
 # classification.pyの出力まとめ
 
-`src/classification.py` の変更によって、判定対象の画像や判定結果を確認しやすくなった。
+`src/image_classification/classification.py` の変更によって、判定対象の画像や判定結果を確認しやすくなった。
 
 ## 実行例
 
 ```bash
-python3 src/classification.py --image-dir img --target bus --top-k 5
+python3 src/image_classification/classification.py --image-dir img --target bus --top-k 5
 ```
 
 ## 出力できるようになったもの
@@ -21,7 +21,7 @@ python3 src/classification.py --image-dir img --target bus --top-k 5
 `--top-k` を変えることで、上位何件まで表示・判定に使うかを変更できる。
 
 ```bash
-python3 src/classification.py --top-k 10
+python3 src/image_classification/classification.py --top-k 10
 ```
 
 これにより、1位の予測だけでは外れてしまう画像でも、上位候補にお題が含まれていれば選択できる。
@@ -55,7 +55,7 @@ python3 src/classification.py --top-k 10
 判定する画像が入っているディレクトリを指定する。
 
 ```bash
-python3 src/classification.py --image-dir img
+python3 src/image_classification/classification.py --image-dir img
 ```
 
 ### `--target`
@@ -63,7 +63,7 @@ python3 src/classification.py --image-dir img
 探したい対象の英語ラベルを指定する。
 
 ```bash
-python3 src/classification.py --target bus
+python3 src/image_classification/classification.py --target bus
 ```
 
 `school bus` のように、予測ラベルの一部に `bus` が含まれる場合も一致として扱う。
@@ -73,7 +73,7 @@ python3 src/classification.py --target bus
 各画像について、予測ラベルの上位何件までを見るかを指定する。
 
 ```bash
-python3 src/classification.py --top-k 5
+python3 src/image_classification/classification.py --top-k 5
 ```
 
 デフォルトは `3`。

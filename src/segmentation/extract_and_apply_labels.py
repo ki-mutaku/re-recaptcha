@@ -10,8 +10,8 @@ def main():
     print(f"Loading model: {model_path}")
     model = YOLO(model_path)
 
-    # ディレクトリの設定
-    base_dir = Path('/Users/tutaya/re-recaptcha/src')
+    # ディレクトリの設定。src直下のデータセット/生成ラベルを参照する。
+    base_dir = Path(__file__).resolve().parents[1]
     data_dir = base_dir / 'my_recaptcha_dataset' / 'data'
     fog_dir = base_dir / 'test_images_fog'
     mosaic_dir = base_dir / 'test_images_mosaic'

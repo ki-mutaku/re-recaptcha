@@ -35,7 +35,7 @@ singularity exec --nv --cleanenv \
   --bind "$PWD:/workspace" \
   --pwd /workspace \
   re-recaptcha.sif \
-  python src/classification.py --image-dir img --target bus --threshold 0.05
+  python src/image_classification/classification.py --image-dir img --target bus --threshold 0.05
 ```
 
 CPU だけで実行する場合は `--nv` を外します。
@@ -78,6 +78,6 @@ tail -f recaptcha-cls-<jobid>.out
 ## 5. 注意点
 
 - SIF は基本的に読み取り専用なので、出力先は bind した `/workspace/runs` などにする。
-- `src/classification.py` が使う ResNet18 の重みは SIF ビルド時に取得済みなので、計算ノードにインターネットがなくても動く。
+- `src/image_classification/classification.py` が使う ResNet18 の重みは SIF ビルド時に取得済みなので、計算ノードにインターネットがなくても動く。
 - NVIDIA ドライバは SIF に入れない。実行時に `--nv` を付けることでホスト側ドライバを使う。
 - CUDA の互換性が合わない場合は、`containers/re-recaptcha.def` の `From:` を学科サーバーのドライバに合う PyTorch CUDA イメージへ変更する。

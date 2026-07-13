@@ -32,4 +32,4 @@ export SINGULARITYENV_YOLO_CONFIG_DIR=/workspace/.cache/ultralytics
     --bind "${PROJECT_DIR}:/workspace" \
     --pwd /workspace \
     "${IMAGE}" \
-    python src/classification.py --image-dir img --target bus --threshold 0.05
+    python src/image_classification/classification.py --image-dir img --target bus --threshold 0.05
