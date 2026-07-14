@@ -96,7 +96,7 @@ best_resnet18_bus.pth（FTモデル）
    │
    ├─ compare_models.py ─▶ zero-shot と AP 比較（img / img_bus_rain / real_recaptcha）
    ├─ filter_validity.py ─▶ フィルタが本物に似てるか（FID）
-   └─ predict_recaptcha.py ─▶ 9マスのデモ判定
+   └─ eval/demo_grid.py ─▶ 本物タイルで3×3を解くデモ（§8）
 ```
 
 学習は **合成データ（COCO＋劣化）**、評価は **本物データ**。ここを混ぜないのが大事です（詳細は §3）。
@@ -130,6 +130,7 @@ best_resnet18_bus.pth（FTモデル）
 | `bootstrap_ci.py` | AP差の95%信頼区間をブートストラップで出す（「差は誤差では?」に答える）|
 | `ablation.py` | 劣化条件を変えて学習し、フィルタの寄与を切り分ける予備実験 |
 | `filter_validity.py` | **フィルタ妥当性の定量評価**。合成劣化が本物にどれだけ近いかを FID で測る |
+| `demo_grid.py` | **3×3デモ**。本物タイルを9マスに並べFTモデルで解く（正解付き。§8）|
 | `download_real_recaptcha.py` | 本物データセット（HuggingFace）を取得し `real_recaptcha/{bus,nonbus}/` へ |
 | `make_real_recaptcha_labels.py` | `real_recaptcha/` のフォルダ構成から正解ラベルCSVを自動生成 |
 | `labels/` | 正解ラベルCSV（`img` / `img_bus_rain` は手付け、`real_recaptcha` は自動生成）|
@@ -299,15 +300,57 @@ zero-shot と FT はスコアの作り方が違いますが、どちらも0〜1�
 
 ---
 
-## 8. 9マス本番デモ（マスごと判定）
+## 8. 3×3デモ（本命：本物タイルで9マスを解く）
 
-リポジトリ・ルートの `split_recaptcha.py` が1枚の reCAPTCHA 画像を3×3＝9マスに切り（`test_images/tile_*.jpg`）、
-`predict_recaptcha.py` が FTモデルで各マスを bus / other 判定して3×3グリッドで表示します。
+本物 reCAPTCHA のタイル（`real_recaptcha/{bus,nonbus}/` の100×100画像）を3×3に並べ、
+学習済みFTモデル（`best_resnet18_bus.pth`）で各マスを bus/other 判定するデモです。
+タイルは自分で選ぶので**各マスの正解が既知**＝「9マス中何マス正解したか」まで言えます。
+
+### 動かす順番
+
+前提：学習済みモデル `best_resnet18_bus.pth` と本物タイル `real_recaptcha/{bus,nonbus}/` があること
+（`main.py` を一度通していれば両方そろっています）。
 
 ```bash
-uv run python split_recaptcha.py            # sample.jpg → test_images/tile_0..8.jpg
-uv run python 画像分類/predict_recaptcha.py  # 9マスを判定して⭕️/❌で表示
+# これだけでデモが動く（リポジトリのルートで）
+uv run python 画像分類/eval/demo_grid.py --seed 1
 ```
+
+出力:
+- `eval/results/demo_grid_input.png` … 出題（3×3グリッド）
+- `eval/results/demo_grid_result.png` … 判定結果（緑枠＝モデルがバスと判定 / 赤枠＝間違い）
+- コンソールに「正解グリッド」「モデルの選択」「確信度」「9マス中◯マス正解」
+
+**発表で全マス正解する鉄板シード：1, 4, 6, 9, 14, 19**（`--threshold 0.5`）。
+
+### 0から準備する場合
+
+モデルやタイルが無い環境では、先に用意してからデモを実行します。
+
+```bash
+uv sync                                             # 1. 環境
+uv run python 画像分類/main.py                       # 2. 学習データ作成＋モデル学習＋本物タイル取得
+uv run python 画像分類/eval/demo_grid.py --seed 1    # 3. デモ実行
+```
+
+### オプション
+
+```bash
+uv run python 画像分類/eval/demo_grid.py               # ランダムに1枚
+uv run python 画像分類/eval/demo_grid.py --seed 1      # 並びを固定（再現・発表用）
+uv run python 画像分類/eval/demo_grid.py --buses 4     # バスを4マスに（1-8）
+uv run python 画像分類/eval/demo_grid.py --threshold 0.5  # バス判定のしきい値
+```
+
+> 使うモデルは現行の **300ベース・新フィルタ FT**（`best_resnet18_bus.pth`）。
+> モデルの1マスあたり正解率は約83%なので、**ランダムな並びでは毎回9/9になるとは限りません**
+> （固定シードで「解ける例」を見せるのが安全。ライブなら「稀に1マス外す」と一言添える）。
+
+### 旧デモ（参考）
+
+古い枠組みとして、ルートの `split_recaptcha.py`（1枚の画像を3×3に分割→`test_images/tile_*.jpg`）＋
+`predict_recaptcha.py`（各マス判定）もあります。ただし入力画像の正解が無く、上の `demo_grid.py` の方が
+本物タイル・正解付きで発表向きです。
 
 ---
 
