@@ -16,7 +16,7 @@ reCAPTCHA の「バスが写っている画像をすべて選んでください�
 ターミナルで次のコマンドを実行します。
 
 ```bash
-uv run python src/classification.py --image-dir img --target bus --threshold 0.05
+uv run python src/image_classification/classification.py --image-dir img --target bus --threshold 0.05
 ```
 
 - `uv run` … 必要なライブラリ込みで Python を実行するコマンド（環境構築済みなら気にしなくてOK）
