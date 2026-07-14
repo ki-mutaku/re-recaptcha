@@ -12,9 +12,9 @@
   - 用途は研究目的。CAPTCHA 突破そのものを目的としない。
 
 使い方:
-  python 画像分類/eval/download_real_recaptcha.py              # 全bus＋同数nonbus
-  python 画像分類/eval/download_real_recaptcha.py --n 600      # 各600枚に制限
-  python 画像分類/eval/download_real_recaptcha.py --splits test  # testのみ
+  python src/image_classification/eval/download_real_recaptcha.py              # 全bus＋同数nonbus
+  python src/image_classification/eval/download_real_recaptcha.py --n 600      # 各600枚に制限
+  python src/image_classification/eval/download_real_recaptcha.py --splits test  # testのみ
 """
 
 import argparse
@@ -23,7 +23,7 @@ import os
 from datasets import load_dataset
 
 BUS_IDX = 1  # labels[1] が bus
-OUT_ROOT = os.path.join(os.path.dirname(__file__), "..", "real_recaptcha")
+OUT_ROOT = os.path.join(os.path.dirname(__file__), "..", "data", "real_recaptcha")
 ALL_SPLITS = ["train", "validation", "test"]
 
 

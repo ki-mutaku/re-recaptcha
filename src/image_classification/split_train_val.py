@@ -6,8 +6,9 @@ from collections import defaultdict
 from data_augment import VARIANT_SUFFIXES
 
 # --- 設定 ---
-# データセットの大元フォルダ
-BASE_DIR = "dataset"
+# データセットの大元フォルダ（このファイルの場所基準で解決する）
+HERE = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.join(HERE, "data", "dataset")
 TRAIN_DIR = os.path.join(BASE_DIR, "train")
 VAL_DIR = os.path.join(BASE_DIR, "val")
 

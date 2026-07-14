@@ -5,8 +5,8 @@
 横並びの比較画像として保存する。
 
 使い方:
-  python 画像分類/eval/make_filter_comparison.py
-  python 画像分類/eval/make_filter_comparison.py --n 4  # 4パターン保存
+  python src/image_classification/eval/make_filter_comparison.py
+  python src/image_classification/eval/make_filter_comparison.py --n 4  # 4パターン保存
 """
 
 import argparse
@@ -20,7 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
 from data_augment import make_night_image, make_rainy_noise_image, make_recaptcha_like_image
 
-REAL_BUS_DIR = os.path.join(HERE, "..", "real_recaptcha", "bus")
+REAL_BUS_DIR = os.path.join(HERE, "..", "data", "real_recaptcha", "bus")
 OUT_DIR = os.path.join(HERE, "results")
 
 FILTERS = [

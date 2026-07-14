@@ -134,7 +134,7 @@ def save_augmented_variants(img, save_dir, base_filename):
     2回適用したもの。乱数幅があるため毎回違う劣化になる。
     本物reCAPTCHA（nobodyPerfecZ/recaptchav2-29k）とのFID比較で、旧フィルタ
     （make_night_image/make_rainy_noise_image）より本物に近いと確認済み
-    （画像分類/eval/filter_validity.py の結果）。
+    （src/image_classification/eval/filter_validity.py の結果）。
 
     bus と other の両方がこの関数を通ることで、必ず同じ3点セットが作られ、
     クラス間で加工の偏りが生じないことを保証する。

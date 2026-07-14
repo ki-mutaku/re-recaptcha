@@ -13,7 +13,7 @@
 - 出力: コンソールの比較表 + マークダウンレポート + PR曲線重ね描きPNG（--output-dir）
 
 実行（リポジトリのルートから）:
-    uv run python 画像分類/eval/compare_models.py
+    uv run python src/image_classification/eval/compare_models.py
 """
 
 import argparse
@@ -49,18 +49,22 @@ from evaluate import (  # noqa: E402
     sweep_thresholds,
 )
 
-# パスはリポジトリのルート基準で解決する（どこから実行しても動くように）
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# パスはパッケージ（src/image_classification）基準で解決する
+PKG_DIR = Path(__file__).resolve().parent.parent
 LABELS_DIR = Path(__file__).resolve().parent / "labels"
-FT_MODEL_PATH = REPO_ROOT / "best_resnet18_bus.pth"
-FT_CLASSES_PATH = REPO_ROOT / "best_resnet18_bus_classes.json"
+FT_MODEL_PATH = PKG_DIR / "models" / "best_resnet18_bus.pth"
+FT_CLASSES_PATH = PKG_DIR / "models" / "best_resnet18_bus_classes.json"
 
 # 評価する3セット: (画像ディレクトリ, ラベルCSV, 表示名)
 DATASETS = [
-    (REPO_ROOT / "img", LABELS_DIR / "img_labels.csv", "晴れ (img)"),
-    (REPO_ROOT / "img_bus_rain", LABELS_DIR / "img_bus_rain_labels.csv", "雨 (img_bus_rain)"),
+    (PKG_DIR / "data" / "img", LABELS_DIR / "img_labels.csv", "晴れ (img)"),
     (
-        REPO_ROOT / "画像分類" / "real_recaptcha",
+        PKG_DIR / "data" / "img_bus_rain",
+        LABELS_DIR / "img_bus_rain_labels.csv",
+        "雨 (img_bus_rain)",
+    ),
+    (
+        PKG_DIR / "data" / "real_recaptcha",
         LABELS_DIR / "real_recaptcha_labels.csv",
         "本物 (real_recaptcha)",
     ),

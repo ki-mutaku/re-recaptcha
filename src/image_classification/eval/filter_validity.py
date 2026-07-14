@@ -22,7 +22,7 @@
        0.5 に近いほど見分けられない＝似ている＝妥当。
 
 使い方:
-  python 画像分類/eval/filter_validity.py
+  python src/image_classification/eval/filter_validity.py
 """
 
 import glob
@@ -47,8 +47,8 @@ from data_augment import (  # noqa: E402
 )
 
 HERE = os.path.dirname(__file__)
-CLEAN_BUS_DIR = os.path.join(HERE, "..", "..", "busbus")
-REAL_BUS_DIR = os.path.join(HERE, "..", "real_recaptcha", "bus")
+CLEAN_BUS_DIR = os.path.join(HERE, "..", "data", "busbus")
+REAL_BUS_DIR = os.path.join(HERE, "..", "data", "real_recaptcha", "bus")
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 

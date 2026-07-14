@@ -10,7 +10,7 @@
 - 評価データ:
   - real_recaptcha (本物画像、正例6693/負例6693)
 - 出力:
-  - 画像分類/eval/results/ablation.md (比較表)
+  - src/image_classification/eval/results/ablation.md (比較表)
 """
 
 import copy
@@ -38,16 +38,16 @@ from data_augment import make_night_image, make_rainy_noise_image, make_recaptch
 from classification import collect_image_paths
 from evaluate import load_labels, match_labels_to_paths
 
-# パスはリポジトリのルート基準
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# パスはパッケージ（src/image_classification）基準
+PKG_DIR = Path(__file__).resolve().parent.parent
 LABELS_DIR = Path(__file__).resolve().parent / "labels"
-REAL_BUS_DIR = REPO_ROOT / "画像分類" / "real_recaptcha"
+REAL_BUS_DIR = PKG_DIR / "data" / "real_recaptcha"
 REAL_LABELS_PATH = LABELS_DIR / "real_recaptcha_labels.csv"
 
-EXISTING_FT_MODEL_PATH = REPO_ROOT / "best_resnet18_bus.pth"
-EXISTING_FT_CLASSES_PATH = REPO_ROOT / "best_resnet18_bus_classes.json"
+EXISTING_FT_MODEL_PATH = PKG_DIR / "models" / "best_resnet18_bus.pth"
+EXISTING_FT_CLASSES_PATH = PKG_DIR / "models" / "best_resnet18_bus_classes.json"
 
-ABLATION_DIR = REPO_ROOT / "dataset_ablation"
+ABLATION_DIR = PKG_DIR / "data" / "dataset_ablation"
 DEFAULT_SEED = 42
 
 def compute_ap_fast(scores, labels):
@@ -70,7 +70,7 @@ def prepare_ablation_datasets():
     """既存の dataset/ から原本画像をコピーして、ABLATION_DIR 内に条件 A と B のデータセットを構築する"""
     print("\n[Data Preparation] Preparing ablation datasets...")
     
-    src_dataset_dir = REPO_ROOT / "dataset"
+    src_dataset_dir = PKG_DIR / "data" / "dataset"
     if not src_dataset_dir.exists():
         raise FileNotFoundError(f"Source dataset directory not found at {src_dataset_dir}")
         
@@ -276,9 +276,11 @@ def main():
     prepare_ablation_datasets()
     
     # 保存モデルパスの定義
-    clean_model_path = REPO_ROOT / "best_resnet18_bus_ablation_clean.pth"
-    oldfilter_model_path = REPO_ROOT / "best_resnet18_bus_ablation_oldfilter.pth"
-    newfilter_model_path = REPO_ROOT / "best_resnet18_bus_ablation_newfilter.pth"
+    models_dir = PKG_DIR / "models"
+    models_dir.mkdir(exist_ok=True)
+    clean_model_path = models_dir / "best_resnet18_bus_ablation_clean.pth"
+    oldfilter_model_path = models_dir / "best_resnet18_bus_ablation_oldfilter.pth"
+    newfilter_model_path = models_dir / "best_resnet18_bus_ablation_newfilter.pth"
 
     # 1. 条件 A (clean) の学習
     if not clean_model_path.exists():

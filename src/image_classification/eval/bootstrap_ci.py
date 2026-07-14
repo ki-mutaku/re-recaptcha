@@ -9,8 +9,8 @@
     - 雨 (img_bus_rain)
     - 本物 (real_recaptcha)
 - 出力:
-    - 画像分類/eval/results/bootstrap_ci.md (表)
-    - 画像分類/eval/results/bootstrap_ci.csv
+    - src/image_classification/eval/results/bootstrap_ci.md (表)
+    - src/image_classification/eval/results/bootstrap_ci.csv
 """
 
 import csv

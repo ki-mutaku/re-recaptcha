@@ -27,7 +27,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# classification.py は eval/ の1つ上（画像分類/ 直下）に置かれている
+# classification.py は eval/ の1つ上（src/image_classification/ 直下）に置かれている
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from classification import (
@@ -38,9 +38,13 @@ from classification import (
     target_confidence_score,
 )
 
-DEFAULT_LABELS = "eval/labels/img_labels.csv"
+# パスはこのファイルの場所を基準に解決する（どこから実行しても動くように）
+_HERE = Path(__file__).resolve().parent
+_PKG_DIR = _HERE.parent
+DEFAULT_IMAGE_DIR = str(_PKG_DIR / "data" / "img")
+DEFAULT_LABELS = str(_HERE / "labels" / "img_labels.csv")
 DEFAULT_TARGET = "bus"
-DEFAULT_OUTPUT_DIR = "eval/results"
+DEFAULT_OUTPUT_DIR = str(_HERE / "results")
 
 # 閾値スイープのテーブル・折れ線グラフに使う、読みやすい閾値の並び。
 # バス確信度は正例で大きく負例で0付近になるため、低めの値も細かく刻む。
@@ -325,7 +329,9 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="分類モデルの適合率・再現率を閾値スイープで評価し、PR曲線とレポートを生成します。"
     )
-    parser.add_argument("--image-dir", default="img", help="評価する画像ディレクトリ")
+    parser.add_argument(
+        "--image-dir", default=DEFAULT_IMAGE_DIR, help="評価する画像ディレクトリ"
+    )
     parser.add_argument("--labels", default=DEFAULT_LABELS, help="正解ラベルCSVのパス")
     parser.add_argument("--target", default=DEFAULT_TARGET, help="探したい対象")
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR, help="出力ディレクトリ")

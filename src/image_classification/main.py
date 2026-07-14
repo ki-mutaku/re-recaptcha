@@ -2,26 +2,26 @@
 学習データDL+加工 → train/val分割 → 学習 → 本物画像DL → フィルタ妥当性評価を一括実行。
 
 ステップ（README.md の手順と一致させている）:
-  1. バス学習データDL+加工   dataset/train/bus/   に300枚（original/night/rain）
-  2. other学習データDL+加工  dataset/train/other/ に300枚
-  3. train/val分割          dataset/val/{bus,other}/ へ約20%を移動（元画像ID単位でリーク防止）
-  4. 学習                   best_resnet18_bus.pth を生成
-  5. 本物reCAPTCHA画像DL     画像分類/real_recaptcha/{bus,nonbus}/ を取得
+  1. バス学習データDL+加工   data/dataset/train/bus/   に300枚（3バリアント）
+  2. other学習データDL+加工  data/dataset/train/other/ に300枚
+  3. train/val分割          data/dataset/val/{bus,other}/ へ約20%を移動（元画像ID単位でリーク防止）
+  4. 学習                   models/best_resnet18_bus.pth を生成
+  5. 本物reCAPTCHA画像DL     data/real_recaptcha/{bus,nonbus}/ を取得
   6. フィルタ妥当性評価       FID/ドメインAUC を測定 → eval/results/filter_validity.csv
 
 スキップ条件（--force なし）:
-  1. dataset/train/bus/   に *_original.jpg があればスキップ
-  2. dataset/train/other/ に *_original.jpg があればスキップ
-  3. dataset/val/bus/     に画像があればスキップ
-  4. best_resnet18_bus.pth があればスキップ
-  5. 画像分類/real_recaptcha/bus/ に *.png があればスキップ
+  1. data/dataset/train/bus/   に *_original.jpg があればスキップ
+  2. data/dataset/train/other/ に *_original.jpg があればスキップ
+  3. data/dataset/val/bus/     に画像があればスキップ
+  4. models/best_resnet18_bus.pth があればスキップ
+  5. data/real_recaptcha/bus/ に *.png があればスキップ
   6. 常に実行
 
 使い方（リポジトリルートから）:
-  uv run python 画像分類/main.py
-  uv run python 画像分類/main.py --n 600        # 本物画像を各600枚に制限
-  uv run python 画像分類/main.py --force        # 全ステップを強制再実行
-  uv run python 画像分類/main.py --from-step 4  # ステップ4から再開（1〜6）
+  uv run python src/image_classification/main.py
+  uv run python src/image_classification/main.py --n 600        # 本物画像を各600枚に制限
+  uv run python src/image_classification/main.py --force        # 全ステップを強制再実行
+  uv run python src/image_classification/main.py --from-step 4  # ステップ4から再開（1〜6）
 """
 
 import argparse
@@ -30,16 +30,16 @@ import os
 import subprocess
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(HERE)
+HERE = os.path.dirname(os.path.abspath(__file__))  # src/image_classification
+REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
 EVAL_DIR = os.path.join(HERE, "eval")
 PY = sys.executable
 
-DATASET_BUS_DIR = os.path.join(REPO_ROOT, "dataset", "train", "bus")
-DATASET_OTHER_DIR = os.path.join(REPO_ROOT, "dataset", "train", "other")
-VAL_BUS_DIR = os.path.join(REPO_ROOT, "dataset", "val", "bus")
-MODEL_PATH = os.path.join(REPO_ROOT, "best_resnet18_bus.pth")
-REAL_BUS_DIR = os.path.join(HERE, "real_recaptcha", "bus")
+DATASET_BUS_DIR = os.path.join(HERE, "data", "dataset", "train", "bus")
+DATASET_OTHER_DIR = os.path.join(HERE, "data", "dataset", "train", "other")
+VAL_BUS_DIR = os.path.join(HERE, "data", "dataset", "val", "bus")
+MODEL_PATH = os.path.join(HERE, "models", "best_resnet18_bus.pth")
+REAL_BUS_DIR = os.path.join(HERE, "data", "real_recaptcha", "bus")
 
 TOTAL_STEPS = 6
 

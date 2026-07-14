@@ -26,10 +26,12 @@ reCAPTCHA の「お題に合う画像を選べ」を、**画像分類**で解く
 - `uv`（Python のパッケージ管理ツール）とネット接続
 - Python 3.12（`.python-version` で固定済みなので `uv` が勝手に合わせる）
 
-### 実行する場所（重要）
+### 実行する場所
 
-**必ずリポジトリのルート**（このREADMEがある `画像分類/` の1つ上）で実行します。
-スクリプトは `dataset/` などを相対パスで探すので、`cd 画像分類` してから動かすと壊れます。
+パスはすべてスクリプト自身の場所（`src/image_classification/` 基準）で解決するので、
+**どのディレクトリから実行しても動きます**。本READMEのコマンド例はルートから実行する形で書いています。
+下記の `data/`・`models/`・`eval/` はすべて `src/image_classification/` からの相対パスです。
+データセットの配置一覧は `data/README.md` を参照。
 
 ### 手順1：依存パッケージを入れる
 
@@ -43,18 +45,18 @@ uv sync
 ### 手順2：パイプラインを一括実行する
 
 ```bash
-uv run python 画像分類/main.py
+uv run python src/image_classification/main.py
 ```
 
 この1コマンドが、下の **6ステップ** を順番に実行します。何をしているか1つずつ説明します。
 
 | ステップ | やること | できるもの | なぜ必要か |
 |---|---|---|---|
-| **1. バス学習データDL+加工** | COCO 2017 からバス画像を集め、1枚を「原本／劣化1／劣化2」の3枚にする | `dataset/train/bus/` | FTモデルに「これがバス」と教える教材 |
-| **2. other 学習データDL+加工** | 同じ加工で「バス以外」を集める | `dataset/train/other/` | 「これはバスじゃない」も教えないと判定できない |
-| **3. train/val 分割** | 学習用と検証用に分ける（**元画像ID単位**で） | `dataset/train` `dataset/val` | 同じ景色が両方に入る「ズル（リーク）」を防ぐ |
-| **4. ResNet18 学習** | バス/その他の2クラスに微調整（FT） | `best_resnet18_bus.pth` | これが判定モデルの本体 |
-| **5. 本物 reCAPTCHA 画像DL** | HuggingFace から本物の reCAPTCHA 画像を取得 | `画像分類/real_recaptcha/` | 「本番の絵」で評価するため |
+| **1. バス学習データDL+加工** | COCO 2017 からバス画像を集め、1枚を「原本／劣化1／劣化2」の3枚にする | `data/dataset/train/bus/` | FTモデルに「これがバス」と教える教材 |
+| **2. other 学習データDL+加工** | 同じ加工で「バス以外」を集める | `data/dataset/train/other/` | 「これはバスじゃない」も教えないと判定できない |
+| **3. train/val 分割** | 学習用と検証用に分ける（**元画像ID単位**で） | `data/dataset/train` `data/dataset/val` | 同じ景色が両方に入る「ズル（リーク）」を防ぐ |
+| **4. ResNet18 学習** | バス/その他の2クラスに微調整（FT） | `models/best_resnet18_bus.pth` | これが判定モデルの本体 |
+| **5. 本物 reCAPTCHA 画像DL** | HuggingFace から本物の reCAPTCHA 画像を取得 | `data/real_recaptcha/` | 「本番の絵」で評価するため |
 | **6. フィルタ妥当性評価** | 合成した劣化が本物にどれだけ似ているかを FID で測る | `eval/results/filter_validity.csv` | 「その劣化加工は妥当なの?」に数値で答える |
 
 > ステップ1と5は最初の1回だけ大きなダウンロードが走ります（COCO注釈zip 約240MB、本物データセット）。時間がかかりますが2回目以降はキャッシュされます。
@@ -64,9 +66,9 @@ uv run python 画像分類/main.py
 `main.py` は、成果物がもう有ればそのステップを飛ばします。やり直したいときは:
 
 ```bash
-uv run python 画像分類/main.py --from-step 4   # ステップ4（学習）からやり直す
-uv run python 画像分類/main.py --force          # 全ステップ強制で作り直す
-uv run python 画像分類/main.py --n 600          # 本物画像を各600枚に制限（軽く試したいとき）
+uv run python src/image_classification/main.py --from-step 4   # ステップ4（学習）からやり直す
+uv run python src/image_classification/main.py --force          # 全ステップ強制で作り直す
+uv run python src/image_classification/main.py --n 600          # 本物画像を各600枚に制限（軽く試したいとき）
 ```
 
 ### 手順3：本命の評価（zero-shot vs FT）を出す
@@ -74,11 +76,11 @@ uv run python 画像分類/main.py --n 600          # 本物画像を各600枚�
 パイプラインとは別に、モデルの強さを比べるレポートを出します。
 
 ```bash
-uv run python 画像分類/eval/make_real_recaptcha_labels.py   # 本物の正解ラベルCSVを作る（初回だけ）
-uv run python 画像分類/eval/compare_models.py               # 3つの評価データで zero-shot と FT を比較
+uv run python src/image_classification/eval/make_real_recaptcha_labels.py   # 本物の正解ラベルCSVを作る（初回だけ）
+uv run python src/image_classification/eval/compare_models.py               # 3つの評価データで zero-shot と FT を比較
 ```
 
-結果は `画像分類/eval/results/` に、比較表（Markdown）とPR曲線の画像で出ます。
+結果は `src/image_classification/eval/results/` に、比較表（Markdown）とPR曲線の画像で出ます。
 
 ---
 
@@ -89,10 +91,10 @@ COCO（学習用の元画像）
    │  download_train_bus.py / download_train_other.py
    │  ＋ data_augment.py（本物寄りの劣化を追加）
    ▼
-dataset/train/{bus,other}   ── split_train_val.py（ID単位で分割）──▶ train / val
+data/dataset/train/{bus,other}   ── split_train_val.py（ID単位で分割）──▶ train / val
    │  train_resnet.py（微調整）
    ▼
-best_resnet18_bus.pth（FTモデル）
+models/best_resnet18_bus.pth（FTモデル）
    │
    ├─ compare_models.py ─▶ zero-shot と AP 比較（img / img_bus_rain / real_recaptcha）
    ├─ filter_validity.py ─▶ フィルタが本物に似てるか（FID）
@@ -111,15 +113,15 @@ best_resnet18_bus.pth（FTモデル）
 |---|---|
 | `main.py` | **一括実行の入口**。上の6ステップを順に呼ぶ（`--from-step` / `--force` / `--n` 対応）|
 | `data_augment.py` | 劣化フィルタの共通部品。現行は本物寄りの `make_recaptcha_like_image` |
-| `download_train_bus.py` | COCO からバス画像を取得し、原本＋劣化2種の計3枚にして `dataset/train/bus/` へ |
-| `download_train_other.py` | 同じ加工で「バス以外」を `dataset/train/other/` へ |
-| `split_train_val.py` | `dataset/train` を train/val に分割（**元画像ID単位**でリーク防止）|
-| `train_resnet.py` | FT 本体。`best_resnet18_bus.pth` を出力（bus の F1 でベスト選択）|
+| `download_train_bus.py` | COCO からバス画像を取得し、原本＋劣化2種の計3枚にして `data/dataset/train/bus/` へ |
+| `download_train_other.py` | 同じ加工で「バス以外」を `data/dataset/train/other/` へ |
+| `split_train_val.py` | `data/dataset/train` を train/val に分割（**元画像ID単位**でリーク防止）|
+| `train_resnet.py` | FT 本体。`models/best_resnet18_bus.pth` を出力（bus の F1 でベスト選択）|
 | `classification.py` | zero-shot ResNet。学習なしで bus 確信度スコアを出す |
-| `predict_recaptcha.py` | FTモデルで9マス（`test_images/tile_*.jpg`）を判定するデモ |
+| `predict_recaptcha.py` | FTモデルで9マス（`data/test_images/tile_*.jpg`）を判定するデモ |
 | `plot.py` | 学習ログをグラフにする |
 | `eval/` | 評価一式（下表）|
-| `real_recaptcha/` | 本物 reCAPTCHA 画像（git管理外。ステップ5が作る）|
+| `data/real_recaptcha/` | 本物 reCAPTCHA 画像（git管理外。ステップ5が作る）|
 
 ### eval/ の中身
 
@@ -131,8 +133,8 @@ best_resnet18_bus.pth（FTモデル）
 | `ablation.py` | 劣化条件を変えて学習し、フィルタの寄与を切り分ける予備実験 |
 | `filter_validity.py` | **フィルタ妥当性の定量評価**。合成劣化が本物にどれだけ近いかを FID で測る |
 | `demo_grid.py` | **3×3デモ**。本物タイルを9マスに並べFTモデルで解く（正解付き。§8）|
-| `download_real_recaptcha.py` | 本物データセット（HuggingFace）を取得し `real_recaptcha/{bus,nonbus}/` へ |
-| `make_real_recaptcha_labels.py` | `real_recaptcha/` のフォルダ構成から正解ラベルCSVを自動生成 |
+| `download_real_recaptcha.py` | 本物データセット（HuggingFace）を取得し `data/real_recaptcha/{bus,nonbus}/` へ |
+| `make_real_recaptcha_labels.py` | `data/real_recaptcha/` のフォルダ構成から正解ラベルCSVを自動生成 |
 | `labels/` | 正解ラベルCSV（`img` / `img_bus_rain` は手付け、`real_recaptcha` は自動生成）|
 | `results/` | 評価レポート・グラフ・CSV の出力先 |
 
@@ -143,9 +145,9 @@ best_resnet18_bus.pth（FTモデル）
 学習データは COCO 2017 から自動で集めます（ステップ1〜3）。単体で回すなら:
 
 ```bash
-uv run python 画像分類/download_train_bus.py     # → dataset/train/bus/   に 900枚
-uv run python 画像分類/download_train_other.py   # → dataset/train/other/ に 900枚
-uv run python 画像分類/split_train_val.py        # → train 720/720・val 180/180 に分割
+uv run python src/image_classification/download_train_bus.py     # → data/dataset/train/bus/   に 900枚
+uv run python src/image_classification/download_train_other.py   # → data/dataset/train/other/ に 900枚
+uv run python src/image_classification/split_train_val.py        # → train 720/720・val 180/180 に分割
 ```
 
 ベース画像300枚 × (原本 / 劣化1 / 劣化2) = 900枚/クラス。ファイル名の末尾は
@@ -198,7 +200,7 @@ bus と other が必ず同じ条件になるようにしています。
 同じクリーンな bus 画像に各フィルタをかけ、本物 bus 6,693枚との距離を比べました。
 
 ```bash
-uv run python 画像分類/eval/filter_validity.py   # → eval/results/filter_validity.csv
+uv run python src/image_classification/eval/filter_validity.py   # → eval/results/filter_validity.csv
 ```
 
 | フィルタ | FID（↓小さいほど本物に近い）| clean基準との差 | 判定 |
@@ -219,13 +221,13 @@ uv run python 画像分類/eval/filter_validity.py   # → eval/results/filter_v
 ## 6. 学習
 
 ```bash
-uv run python 画像分類/train_resnet.py
+uv run python src/image_classification/train_resnet.py
 ```
 
 Mac の MPS で10エポック、だいたい1分。出力はリポジトリのルートに2つ:
 
-- `best_resnet18_bus.pth` … 学習した重み
-- `best_resnet18_bus_classes.json` … クラスの並び `["bus", "other"]`（推論側がどっちが bus か迷わないため）
+- `models/best_resnet18_bus.pth` … 学習した重み
+- `models/best_resnet18_bus_classes.json` … クラスの並び `["bus", "other"]`（推論側がどっちが bus か迷わないため）
 
 ベストは Accuracy ではなく **bus の F1** で選びます（見逃しと誤爆のバランスを見たいため）。
 元画像が少ないので、数エポックで train はほぼ満点になり val loss は上がる＝過学習気味です。
@@ -237,14 +239,14 @@ Mac の MPS で10エポック、だいたい1分。出力はリポジトリの�
 
 ### 評価データ（3セット・すべて本物の画像）
 
-- `img/` … 晴れ（劣化なしの通常写真）。正例11 / 負例99（手付けラベル）
-- `img_bus_rain/` … 雨（劣化ありの通常写真）。正例50 / 負例52（手付けラベル）
-- `画像分類/real_recaptcha/` … **本物 reCAPTCHA**。正例(bus)6,693 / 負例(nonbus)6,693（フォルダから自動ラベル）
+- `data/img/` … 晴れ（劣化なしの通常写真）。正例11 / 負例99（手付けラベル）
+- `data/img_bus_rain/` … 雨（劣化ありの通常写真）。正例50 / 負例52（手付けラベル）
+- `data/real_recaptcha/` … **本物 reCAPTCHA**。正例(bus)6,693 / 負例(nonbus)6,693（フォルダから自動ラベル）
 
 > real_recaptcha は bus/nonbus を同数に揃えたバランス評価です。実際の reCAPTCHA ではバスの出現率はもっと低いので、AP の絶対値は実運用と一致しません（zero-shot と FT の比較の公平性には影響しません）。
 
 ```bash
-uv run python 画像分類/eval/compare_models.py   # → eval/results/zeroshot_vs_ft_比較.md ほか
+uv run python src/image_classification/eval/compare_models.py   # → eval/results/zeroshot_vs_ft_比較.md ほか
 ```
 
 ### 結果（AP＝PR曲線の下の面積。1.0が満点）
@@ -302,18 +304,18 @@ zero-shot と FT はスコアの作り方が違いますが、どちらも0〜1�
 
 ## 8. 3×3デモ（本命：本物タイルで9マスを解く）
 
-本物 reCAPTCHA のタイル（`real_recaptcha/{bus,nonbus}/` の100×100画像）を3×3に並べ、
-学習済みFTモデル（`best_resnet18_bus.pth`）で各マスを bus/other 判定するデモです。
+本物 reCAPTCHA のタイル（`data/real_recaptcha/{bus,nonbus}/` の100×100画像）を3×3に並べ、
+学習済みFTモデル（`models/best_resnet18_bus.pth`）で各マスを bus/other 判定するデモです。
 タイルは自分で選ぶので**各マスの正解が既知**＝「9マス中何マス正解したか」まで言えます。
 
 ### 動かす順番
 
-前提：学習済みモデル `best_resnet18_bus.pth` と本物タイル `real_recaptcha/{bus,nonbus}/` があること
+前提：学習済みモデル `models/best_resnet18_bus.pth` と本物タイル `data/real_recaptcha/{bus,nonbus}/` があること
 （`main.py` を一度通していれば両方そろっています）。
 
 ```bash
 # これだけでデモが動く（リポジトリのルートで）
-uv run python 画像分類/eval/demo_grid.py --seed 1
+uv run python src/image_classification/eval/demo_grid.py --seed 1
 ```
 
 出力:
@@ -329,26 +331,26 @@ uv run python 画像分類/eval/demo_grid.py --seed 1
 
 ```bash
 uv sync                                             # 1. 環境
-uv run python 画像分類/main.py                       # 2. 学習データ作成＋モデル学習＋本物タイル取得
-uv run python 画像分類/eval/demo_grid.py --seed 1    # 3. デモ実行
+uv run python src/image_classification/main.py                       # 2. 学習データ作成＋モデル学習＋本物タイル取得
+uv run python src/image_classification/eval/demo_grid.py --seed 1    # 3. デモ実行
 ```
 
 ### オプション
 
 ```bash
-uv run python 画像分類/eval/demo_grid.py               # ランダムに1枚
-uv run python 画像分類/eval/demo_grid.py --seed 1      # 並びを固定（再現・発表用）
-uv run python 画像分類/eval/demo_grid.py --buses 4     # バスを4マスに（1-8）
-uv run python 画像分類/eval/demo_grid.py --threshold 0.5  # バス判定のしきい値
+uv run python src/image_classification/eval/demo_grid.py               # ランダムに1枚
+uv run python src/image_classification/eval/demo_grid.py --seed 1      # 並びを固定（再現・発表用）
+uv run python src/image_classification/eval/demo_grid.py --buses 4     # バスを4マスに（1-8）
+uv run python src/image_classification/eval/demo_grid.py --threshold 0.5  # バス判定のしきい値
 ```
 
-> 使うモデルは現行の **300ベース・新フィルタ FT**（`best_resnet18_bus.pth`）。
+> 使うモデルは現行の **300ベース・新フィルタ FT**（`models/best_resnet18_bus.pth`）。
 > モデルの1マスあたり正解率は約83%なので、**ランダムな並びでは毎回9/9になるとは限りません**
 > （固定シードで「解ける例」を見せるのが安全。ライブなら「稀に1マス外す」と一言添える）。
 
 ### 旧デモ（参考）
 
-古い枠組みとして、ルートの `split_recaptcha.py`（1枚の画像を3×3に分割→`test_images/tile_*.jpg`）＋
+古い枠組みとして、同ディレクトリの `split_recaptcha.py`（1枚の画像を3×3に分割→`data/test_images/tile_*.jpg`）＋
 `predict_recaptcha.py`（各マス判定）もあります。ただし入力画像の正解が無く、上の `demo_grid.py` の方が
 本物タイル・正解付きで発表向きです。
 
@@ -362,9 +364,9 @@ uv run python 画像分類/eval/demo_grid.py --threshold 0.5  # バス判定の�
 
 ```bash
 uv sync                                                     # ① 依存を入れる
-uv run python 画像分類/main.py                              # ② 学習データ〜本物DL〜フィルタ妥当性まで一括（6ステップ）
-uv run python 画像分類/eval/make_real_recaptcha_labels.py   # ③ 本物の正解ラベルCSV
-uv run python 画像分類/eval/compare_models.py               # ④ zero-shot vs FT の AP 比較
+uv run python src/image_classification/main.py                              # ② 学習データ〜本物DL〜フィルタ妥当性まで一括（6ステップ）
+uv run python src/image_classification/eval/make_real_recaptcha_labels.py   # ③ 本物の正解ラベルCSV
+uv run python src/image_classification/eval/compare_models.py               # ④ zero-shot vs FT の AP 比較
 ```
 
 ### どこまで固定できているか（再現性）
@@ -373,13 +375,13 @@ uv run python 画像分類/eval/compare_models.py               # ④ zero-shot 
 - **パッケージは `uv.lock` 固定**。
 - 固定しきれない部分:
   - COCO 側の画像URLが将来変われば取得物が変わる。
-  - `img/` `img_bus_rain/` の評価ラベルは手付けなのでスクリプトからは作れない。
+  - `data/img/` `data/img_bus_rain/` の評価ラベルは手付けなのでスクリプトからは作れない。
   - MPS と CPU で計算順が変わり、AP の下の桁が少しぶれることがある。
   - 劣化フィルタは乱数を含むので、FID の値も再実行で下1桁が少し動く。
 
 ### 注意：git 管理外の生成物
 
-`best_resnet18_bus.pth`（モデル）と `dataset/`、`real_recaptcha/` は **git に入れていません**（作り直せるため）。
+`models/best_resnet18_bus.pth`（モデル）と `data/dataset/`、`data/real_recaptcha/` は **git に入れていません**（作り直せるため）。
 別のマシンで学習したモデルは手元に来ないので、**数値を出す前に「そのモデルはいつ・どのデータで学習したものか」を必ず確認**してください
 （過去にこれで旧モデルと新モデルを取り違える事故がありました）。
 
@@ -389,7 +391,7 @@ uv run python 画像分類/eval/compare_models.py               # ④ zero-shot 
 
 - 出典: HuggingFace `nobodyPerfecZ/recaptchav2-29k`（実際の reCAPTCHA v2 デモページをスクレイピングした実画像、29,568枚・100×100）。
 - ライセンス: MIT。ただし **画像は Google 所有**で、利用は **非営利・教育・研究目的に限定**。Google 非公式。
-- 本リポジトリでは **画像実体を git 管理しません**（`real_recaptcha/` は `.gitignore` 済み）。**再配布しません**。
+- 本リポジトリでは **画像実体を git 管理しません**（`data/real_recaptcha/` は `.gitignore` 済み）。**再配布しません**。
 - 用途は研究目的であり、**CAPTCHA 突破そのものを目的としません**。
 
 ---

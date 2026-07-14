@@ -9,10 +9,10 @@ real_recaptcha/{bus,nonbus}/ から bus と nonbus のタイル（各100×100・
 タイルは自分で選ぶので各マスの正解が既知 → 「何マス正解したか」まで言える。
 
 使い方（リポジトリのルートで）:
-  uv run python 画像分類/eval/demo_grid.py                 # ランダムに1枚デモ
-  uv run python 画像分類/eval/demo_grid.py --buses 4       # バスを4マスに
-  uv run python 画像分類/eval/demo_grid.py --seed 7        # 並びを固定（再現・発表用）
-  uv run python 画像分類/eval/demo_grid.py --threshold 0.5 # 判定しきい値
+  uv run python src/image_classification/eval/demo_grid.py                 # ランダムに1枚デモ
+  uv run python src/image_classification/eval/demo_grid.py --buses 4       # バスを4マスに
+  uv run python src/image_classification/eval/demo_grid.py --seed 7        # 並びを固定（再現・発表用）
+  uv run python src/image_classification/eval/demo_grid.py --threshold 0.5 # 判定しきい値
 
 出力:
   eval/results/demo_grid_input.png   … 出題（3×3グリッド）
@@ -30,11 +30,11 @@ from PIL import Image, ImageDraw, ImageFont
 from torchvision import models, transforms
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(os.path.dirname(HERE))
-MODEL_PATH = os.path.join(REPO, "best_resnet18_bus.pth")
-CLASSES_PATH = os.path.join(REPO, "best_resnet18_bus_classes.json")
-BUS_DIR = os.path.join(HERE, "..", "real_recaptcha", "bus")
-NONBUS_DIR = os.path.join(HERE, "..", "real_recaptcha", "nonbus")
+PKG = os.path.dirname(HERE)
+MODEL_PATH = os.path.join(PKG, "models", "best_resnet18_bus.pth")
+CLASSES_PATH = os.path.join(PKG, "models", "best_resnet18_bus_classes.json")
+BUS_DIR = os.path.join(PKG, "data", "real_recaptcha", "bus")
+NONBUS_DIR = os.path.join(PKG, "data", "real_recaptcha", "nonbus")
 OUT_DIR = os.path.join(HERE, "results")
 
 TILE = 100      # 1マスのpxサイズ（本物が100×100）

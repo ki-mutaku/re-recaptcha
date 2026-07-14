@@ -9,14 +9,14 @@ download_real_recaptcha.py がフォルダ分けの時点でラベル付け済�
   （evaluate.py の match_labels_to_paths が末尾2階層をキーに照合するため）
 
 使い方:
-  python 画像分類/eval/make_real_recaptcha_labels.py
+  python src/image_classification/eval/make_real_recaptcha_labels.py
 """
 
 import csv
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REAL_DIR = os.path.join(HERE, "..", "real_recaptcha")
+REAL_DIR = os.path.join(HERE, "..", "data", "real_recaptcha")
 OUT_CSV = os.path.join(HERE, "labels", "real_recaptcha_labels.csv")
 
 

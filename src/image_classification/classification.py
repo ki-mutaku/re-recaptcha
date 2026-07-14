@@ -21,7 +21,9 @@ from torchvision.models import ResNet18_Weights
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
 IMAGE_SIZE = 224
-DEFAULT_IMAGE_DIR = "img_bus_rain"
+# 評価画像のデフォルト（このファイルの場所基準で解決する）
+_PKG_DIR = Path(__file__).resolve().parent
+DEFAULT_IMAGE_DIR = str(_PKG_DIR / "data" / "img_bus_rain")
 DEFAULT_TARGET = "bus"
 
 # 選択の判定に使う確信度スコアの閾値。スコアが閾値以上の画像を「お題が写っている」とみなす。

@@ -10,12 +10,15 @@ from PIL import Image
 from data_augment import DEFAULT_SEED, clean_stale_variants, save_augmented_variants
 
 # --- 設定 ---
-SAVE_DIR = "dataset/train/bus"
+# パスはこのファイルの場所（src/image_classification）基準で解決する
+HERE = os.path.dirname(os.path.abspath(__file__))
+SAVE_DIR = os.path.join(HERE, "data", "dataset", "train", "bus")
 MAX_BASE_IMAGES = 300  # 集めるベース画像の枚数（3パターン加工で合計900枚になります）
 MIN_AREA_RATIO = 0.1  # バスの面積が画像全体の10%以上あるものだけを採用する（0.1 = 10%）
 ANNOTATION_URL = "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
-ZIP_FILE = "annotations_trainval2017.zip"
-JSON_FILE = "annotations/instances_train2017.json"
+COCO_DIR = os.path.join(HERE, "data", "coco")  # COCOアノテーションの置き場
+ZIP_FILE = os.path.join(COCO_DIR, "annotations_trainval2017.zip")
+JSON_FILE = os.path.join(COCO_DIR, "annotations", "instances_train2017.json")
 # -----------
 
 
@@ -32,12 +35,13 @@ def main():
         print(f"【清掃】{SAVE_DIR} の旧フィルタ生成物を {removed} 枚削除しました。")
 
     if not os.path.exists(JSON_FILE):
+        os.makedirs(COCO_DIR, exist_ok=True)
         if not os.path.exists(ZIP_FILE):
             print("COCOアノテーションデータをダウンロードしています...")
             urllib.request.urlretrieve(ANNOTATION_URL, ZIP_FILE)
         print("Zipファイルを解凍しています...")
         with zipfile.ZipFile(ZIP_FILE, "r") as zip_ref:
-            zip_ref.extractall(".")
+            zip_ref.extractall(COCO_DIR)
 
     print("アノテーションデータを読み込んでいます...")
     with open(JSON_FILE, "r") as f:
