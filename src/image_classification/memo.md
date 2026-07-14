@@ -1,124 +1,163 @@
+# 発表に向けた全体まとめ（2026-07-14時点）
 
-新しい日付を一番上に足していく。
-進捗を都度記入
-手動でpush
+発表準備用に、これまでの経緯を整理し直した。まずここだけ読めば全体が追えるようにする。週ごとの生ログはこの下にそのまま残している。
+
+## 何を作っているか
+
+reCAPTCHA風の「9枚の画像からバスをすべて選ぶ」クイズを、AIに解かせる実験。9枚を1枚ずつ「バスか、バスでないか」の二値分類にかける方式で、モデルはImageNetで事前学習済みのResNet18。
+
+比べているのは大きく2つのやり方。
+
+- zero-shot: 追加学習なしのResNet18をそのまま使う
+- FT（ファインチューニング）: COCOの写真にreCAPTCHA風の劣化をかけた合成データで、少しだけ再学習する
+
+評価には、実際のreCAPTCHA v2から集められた公開データセット（`nobodyPerfecZ/recaptchav2-29k`、100×100タイル約29,000枚）を使う。
+
+## これまでの流れ
+
+| 週 | 日付 | 何をしたか |
+|---|---|---|
+| 9週目 | 6/16 | 他メンバーの物体検出・データ収集コードをpullして整理した |
+| 10週目 | 6/25 | bus/other分類を一通り実装。合成の評価データではzero-shotがFTに勝ち、経過報告で「その劣化フィルタは本物に似ているのか」と突かれた |
+| 11週目 | 6/30 | 本物データセットを導入。フィルタを本物寄り（低解像度＋ぼかし＋JPEG再圧縮）に作り直し、FIDで妥当性を数字にした。本物での評価ではFTがzero-shotを逆転した |
+| 12週目 | 7/7 | 進捗報告。その最中にモデル取り違え事故が発覚し、復旧とアブレーションのやり直しをした |
+| 13週目 | 7/14 | コードとデータの置き場を整理して再学習。3×3デモを試したら精度が悪く、本物画像を学習にも混ぜる実験（mixed-real）の準備を始めた |
+
+15週目が発表会。14週目はレポートと発表資料に充てる。
+
+## 発表で言い切れること
+
+1. **劣化フィルタの妥当性をFIDで示せた。** 新フィルタ（低解像度＋ぼかし＋JPEG）は本物busへの特徴距離165で、比べた4条件の中で本物に最も近い。旧・雨フィルタ（白線を描くだけ）は378で、劣化なし（207）より遠ざかる逆効果だった。数字と見た目の比較画像の両方で説明できる。
+2. **本物データでだけFTがzero-shotに勝った。** 晴れや雨の通常写真ではzero-shotが上なのに、本物reCAPTCHAではAP 0.875 → 0.906（+0.031）。本物寄りの劣化で学習したことが本物への転移を良くした、という筋がFIDの結果とも合う。
+3. **劣化つきの水増し自体は効く。** アブレーションで、劣化なしの学習はAP 0.842までzero-shotより落ちた（過学習の実例）。劣化ありは0.868〜0.911。授業で習った過学習・正則化・データ分割の話とそのまま接続できる。
+
+## 言い方に気をつけること
+
+- **「人間を超えた」とは言わない。** モデルのmaxF1 0.827はタイル1枚単位、人間の約81%はクイズ1問（9マス全部正解）単位で、測り方が違う。数字を並べて優劣は語れない。
+- **新フィルタが旧フィルタより精度を上げるかは未決着。** やり直したアブレーションでは新0.868 < 旧0.911で、単一シードのブレが大きい。言えるのは「FIDで本物に最も近い」ことまで。
+- **AP 0.906は過去の学習時点の記録。** 7/14に再学習した現行モデル（val bus F1 0.8761）のtest性能は未計測。数字を出すときは、どのモデルをいつどのデータで学習したかをセットで言う（7/7の取り違え事故の教訓）。
+
+## デモの現状と次の一手
+
+3×3デモ（`eval/demo_grid.py`）自体は動く。ただし7/14に試したところ誤判定が目立ち、そのまま発表で見せられる出来ではなかった。合成データだけの学習では本物とのドメイン差が埋まっていない（domain AUC≈1.0）ことと話が合う。
+
+そこで、本物画像の一部を学習にも混ぜる案（mixed-real）に着手した。ズルにならないよう、先に全29kをtrain/val/testへ固定分割し、test 9,370枚は学習から完全に隔離した（見た目がほぼ同じ近重複画像も同じ側にまとめてある）。分割、学習コード、学習前の監査までは完了。**本学習と固定testでの比較はまだやっていない。**
+
+## 発表までにやること
+
+1. mixed-realモデルを本学習し、固定test 9,370枚でsynthetic-onlyモデルと比較する。
+2. 改善したらデモをmixed-realモデルで撮り直す。改善しなくても「合成だけでは足りない」という結果として発表に使える。
+3. デモ画像（出題と判定結果）とフィルタ比較画像を資料に貼る。
+4. 資料に載せる数字ごとに、モデル、学習データ、測定日を明記する。
 
 ---
----
----
+
 # 2026-07-14（13週目）
 
-テーマ：**READMEの「`main.py` を1度通せば学習済みモデルと本物タイルがそろう」を実際に確認する。**
+## 今日のテーマ
 
-## 実行したコマンド
+画像分類ラインを整理し直し、確かめられる事実、過去の記録、未完了の実験を分けた。3×3デモを試したところ精度が悪く、本物画像を学習に混ぜる実験（mixed-real）の準備まで進めた。
+
+## 今日やったこと
+
+1. 画像分類のコード、データ、モデルの置き場を `src/image_classification/` 配下に統一した。
+2. `main.py` でsynthetic-onlyモデルを再学習した。
+3. 3×3デモ（`eval/demo_grid.py`）を試した。誤判定が目立ち、このままでは発表に出せない → 本物画像を学習に混ぜる方針へ。
+4. `real_recaptcha` 全29kをtrain / val / testへ固定分割した。近重複画像は同じsplitにまとめ、リークを防いだ。
+5. mixed-real学習と固定test比較のコードを追加し、学習を伴わない監査（dry-run / audit-only）まで通した。
+6. `README.md` を、0から再現する手順を軸にした構成へ書き直した。あわせてリポジトリ全体（Python 5,221行）の再現性レビューをした。
+
+主なコミットは `f3ab98ad`、`fd9c471a`、`44e4392e`。作業ブランチは `image-classification-2`。
+
+## 再学習したsynthetic-onlyモデル
 
 ```bash
 UV_CACHE_DIR=/tmp/uv-cache uv run --frozen python src/image_classification/main.py
 ```
 
-- 実行環境：CPU、Python 3.12、乱数シード42。
-- 結果：6ステップすべて完了し、プロセスはexit 0。
-
-## 実行結果
-
-| step | 実際の動作 | 結果 |
-|---|---|---|
-| 1. busデータ | `dataset/train/bus` に既存画像があったためskip | 既存555ファイル（185ベース）のまま |
-| 2. otherデータ | COCOからダウンロード＋新フィルタ加工 | 900ファイル（300ベース）を生成 |
-| 3. train/val分割 | 元画像ID単位で20% をvalへ移動 | train: bus 444 / other 720、val: bus 111 / other 180 |
-| 4. ResNet18学習 | CPUで10 epoch実行 | 11分27秒、最高val bus F1 = **0.8761**（4 epoch目） |
-| 5. 本物タイル | `real_recaptcha/bus` に既存画像があったためskip | bus 6,693枚 / nonbus 6,693枚を確認 |
-| 6. フィルタ評価 | ResNet18特徴でFIDとdomain AUCを再計測 | CSV更新、正常終了 |
-
-学習のベスト時点（4 epoch目）は、val accuracy 0.9038、bus precision 0.8609、recall 0.8919、F1 0.8761。train accuracyは4 epoch目で1.0000に達し、その後val F1は低下したため、過学習の傾向も再現した。
-
-### 今回生成したモデル
-
-- `best_resnet18_bus.pth`：44,788,939 bytes、SHA-256 `42316984a20e3e3255a22f4c08e0d94856116c6cfcae75c711734b5d233cb27a`
-- `best_resnet18_bus_classes.json`：`["bus", "other"]`
-
-### 再計測したフィルタ妥当性
-
-| 条件 | FID（小さいほど本物に近い） |
+| 項目 | 結果 |
 |---|---:|
-| clean | 206.75 |
-| old_night | 179.91 |
-| old_rain | 377.69 |
-| **new** | **165.22** |
+| 合成train | 1,164枚（bus 444 / other 720） |
+| 合成val | 291枚（bus 111 / other 180） |
+| epoch | 10 |
+| best epoch | 4 |
+| best val bus F1 | 0.8761 |
+| best val accuracy | 0.9038 |
+| best val precision / recall | 0.8609 / 0.8919 |
 
-新フィルタが最も本物に近く、old_rainはcleanよりも遠いというこれまでの順位は再現した。`scipy.linalg.sqrtm` の `disp` に対するDeprecationWarningは出たが、計算とCSV保存は完了した。
+モデルは `models/best_resnet18_bus.pth`。SHA-256は `42316984a20e3e3255a22f4c08e0d94856116c6cfcae75c711734b5d233cb27a`。
 
-## READMEの記述を実行して分かったこと
+注意点が2つ。busは既存185原本、otherは300原本からの学習で、均衡した0からの再生成ではない。過去レポートの本物 `AP=0.906`、最大`F1=0.827` は別の学習時点の記録で、今日のモデルのreal test性能ではない。
 
-- **ファイルの存在という意味では記述どおり。** 実行後は `best_resnet18_bus.pth` と `real_recaptcha/{bus,nonbus}/` の両方がそろった。
-- **ただし、今回は「0からの再現」ではない。** busデータと本物タイルが一部または全部残っており、step 1とstep 5はskipされた。
-- `main.py` は1枚でも `*_original.jpg` があればそのstepsをskipする。今回はbusが185ベースしかないのに完了扱いとなり、bus 185 / other 300ベースの不均衡なデータで学習した。
-- そのため、**今回のモデルはREADMEに記録された「300ベース新フィルタFT」とは別物**。READMEの本物 AP 0.906 / 最大F1 0.827は過去のモデルの評価であり、今回生成したモデルの本物APはまだ測っていない。
-- READMEの鉄板seed `1, 4, 6, 9, 14, 19` も過去のモデルに対する記録。今回のモデルで同じく9/9になるかは未確認。
+## 3×3デモの結果
+
+`demo_grid.py` を何度か回したが、誤判定が目立った。何問中何問という記録は残していないので、次に回すときはseedと出力画像を保存する。
+
+見立て: フィルタ妥当性評価でdomain AUCがほぼ1.0（本物と合成をほぼ完全に区別できる）だったことから、合成データだけの学習では本物への汎化が足りない。これがmixed-real実験に進む動機になった。
+
+## mixed-real実験の固定split
+
+| split | bus | nonbus | 用途 |
+|---|---:|---:|---|
+| train | 1,339 | 1,339 | 学習へ追加する候補 |
+| val | 669 | 669 | best epochの選択 |
+| test | 4,685 | 4,685 | 最終比較専用 |
+
+- 全13,386枚、近重複グループ13,251。
+- SHA-256完全一致と、dHashのHamming距離4以下を同一グループにした。
+- splitをまたぐグループは0、bus/nonbusをまたぐグループも0。
+- mixed-realのdry-runは、合成train 1,164枚、本物train 1,200枚、本物val 600枚で成功。
+- 固定test 9,370枚のaudit-onlyも成功。
+- **本学習と最終比較は未実行。**
+
+## 全体レビューで分かった問題
+
+結果の解釈まわり:
+
+- タイル単位のF1と、人間のクイズ単位の正答率は別の指標。`0.827 > 0.81` だけで「人間を上回った」とは言えない。
+- zero-shotのbus判定は部分文字列一致で、`minibus`、`school bus`、`trolleybus` に加えて `bustard`（ノガン）と `colobus`（サル）の確率までbusへ合算している。過去のzero-shot APはラベルIDを直して再計測が必要。
+- FIDは標準のInceptionV3ではなくResNet18特徴による相対距離。他実装のFIDとは比較しない。
+
+再現性まわり:
+
+- `main.py` は対象ファイルが1枚でもあると工程をskipするので、部分生成状態を完了と誤認する。`--force` も既存train / valを空にしない。
+- fresh cloneにはGit管理外の `data/busbus/` が無いため、`main.py` はstep 6まで完走できない。
+- 固定manifestの通常監査はパスと構造の確認だけで、画像を再ハッシュして内容の変化までは検出しない。
+- `uv lock --check` が不一致で終了した。`pyproject.toml` の依存が `uv.lock` に反映されていない。
+
+他の実験ライン:
+
+- `src/object_detection/test_best_model.py` は別ユーザーの絶対パスを参照していて、そのままでは動かない。
+- 物体検出とセグメンテーションに、リファクタリング前後のパスが混在している。
+- fog / mosaicの同一原本バリエーションを画像単位でランダム分割していて、train / valリークが起こり得る。
+- `containers/re-recaptcha.def` は `pyproject.toml` と同じ依存集合を構築しておらず、画像分類の全工程を再現するコンテナになっていない。
+
+## 今日実行した検証
+
+```bash
+uv run python -m compileall -q src
+uv run --frozen python src/image_classification/eval/prepare_real_recaptcha_split.py
+uv run --frozen python src/image_classification/train_real_recaptcha.py --dry-run
+uv run --frozen python src/image_classification/eval/compare_real_recaptcha_training.py --audit-only
+uv lock --check
+git diff --check
+```
+
+lock同期確認だけ失敗（lock更新が必要）。それ以外は成功。
 
 ## 次にやること
 
-- [ ] `main.py` のskip条件を「1枚でもあるか」ではなく、期待ベース数と各バリアントの完全性で判定する。
-- [ ] 本当に0から再現するときは、train/valの残留データを混ぜないクリーンな再生成手順を用意する。`--force` だけでは既存valを掃除しないため、重複やリークが発生しないかを先に確認する。
-- [ ] 今回のモデルについて `compare_models.py` を実行し、本物AP/最大F1を出す。
-- [ ] `demo_grid.py` の固定seedを今回のモデルで再検証する。
+1. mixed-realモデルを本学習し、固定test全9,370枚でbaselineと比較する。改善したらデモを撮り直す。
+2. zero-shotのbusラベル対応をID指定へ直し、過去評価を再計測する。
+3. `main.py` に期待枚数と3バリアントの完全性検査を追加する。
+4. baselineモデルにもmanifest hash、データ件数、seed、best epochをmetadataとして保存する。
+5. 改善が見えた場合は複数seedと信頼区間で追試する。
+6. 物体検出・セグメンテーションのパスと、原本単位splitを修正する。
 
-## 追記（同日）：画像分類一式を `src/image_classification/` に整理
-
-ルートと旧 `画像分類/` に9箇所散らばっていたコード・データ・モデルを `src/image_classification/` に集約した。一覧表は **`src/image_classification/data/README.md`** が正。
-
-- コード：旧 `画像分類/` とルートの `split_recaptcha.py` を `src/image_classification/` へ移動。
-- `src/image_classification/data/` へ移動：`img/`・`img_bus_rain/`・`busbus/`・`sample*.jpg`（以上git管理）、
-  `dataset/`・`dataset_ablation/`・`annotations`+zip（→`data/coco/`）・`real_recaptcha/`（以上git管理外）。
-- `src/image_classification/models/` へ移動：`best_resnet18_bus*.pth`・`best_resnet18_bus_classes.json`（git管理外）。
-- スクリプト約15本のパスを**`src/image_classification/` 基準（`__file__`起点）に統一**。どのディレクトリから実行しても動くようになった。
-  COCOのzipと解凍先も同ディレクトリの `data/coco/` に固定（従来はCWD直下に散らかっていた）。
-- 評価ラベルCSVはキーが「ディレクトリ名/ファイル名」の2階層照合なので**変更不要**（中のディレクトリ名は変えていない）。
-- ついでのバグ修正：`sample.jpg` は中身がRGBAのPNGで、`split_recaptcha.py` がJPEG保存で落ちていた → RGB変換を追加。
-
-動作確認：全スクリプト py_compile OK／`split_recaptcha.py`→`predict_recaptcha.py` のデモ経路OK／
-`demo_grid.py --seed 1` で9/9（従来どおり）／`make_real_recaptcha_labels.py` 再生成で差分なし。
-
-### git管理データと旧資産の監査
-
-- git管理中：`data/img/` 110枚（晴れ評価）、`data/img_bus_rain/` 102枚（雨評価）、`data/busbus/` 95枚（フィルタ妥当性評価の原本）、`data/samples/` 2枚。
-- 上のうち `sample_reCAPTCHA.jpg` だけは現行コードから参照されていなかったため、`data/samples/legacy/` へ隔離した。削除はせず由来確認用に保持。
-- git管理外の現行 `data/dataset/` 1,455枚は `_original`・`_degraded1`・`_degraded2` が各485枚で、旧 `_night`・`_rain` の混在なし。
-- `data/dataset_ablation/` の旧フィルタ画像は古い残骸ではなく比較実験用の生成物。通常学習には使わない。
-- ルートに残っていた `make rough image/rough_bus.py` は、mainの担当分けに合わせて `src/object_detection/rough_bus.py` へ移した。
-- main統合時に追跡方針も統一し、`img/`・`img_bus_rain/`・`busbus/` はローカルに残したままgit追跡を外した。コード、ラベル、固定split、結果要約をgitで共有する。
-
-### 他マシン（hibiki）への引き継ぎ【重要】
-
-git管理外の生成物は移動されないので、このブランチをpullしたら手で移動する（やらないと `main.py` が再生成・再DLを始める）：
-
-```bash
-mkdir -p src/image_classification/data/coco src/image_classification/models
-mv dataset src/image_classification/data/dataset
-mv dataset_ablation src/image_classification/data/dataset_ablation
-mv annotations src/image_classification/data/coco/annotations
-mv annotations_trainval2017.zip src/image_classification/data/coco/
-mv 画像分類/real_recaptcha src/image_classification/data/real_recaptcha
-mv best_resnet18_bus*.pth best_resnet18_bus_classes.json src/image_classification/models/
-```
-
-### mainブランチとの関係（要注意・要相談）
-
-- main は Refactoring (#28) で `img/`・`img_bus_rain/`・`busbus/` を**削除済み**（コードは `src/image_classification/` 等へ再編）。
-  評価データの実体はこのブランチにしか無い。今回 `src/image_classification/data/` へ移したので、次にmainを取り込むと
-  rename/delete のコンフリクトになるはず → **「こちら（data配下）を残す」で解決**する。放置してマージすると黙って消えるので注意。
-- コードの置き場はmainと同じ `src/image_classification/` に統一済み。このブランチ側の新版を採用する。
-
-### 検討中：real_recaptcha の一部を学習に使う案
-
-精度の頭打ちはドメインギャップが原因（FIDの実験と整合）なので、方向性は有望。ただし着手時は：
-1. train/test 分離を**最初にCSVで凍結**して以後の評価はそこに統一、
-2. 同じパズル由来のタイルが train/test に割れる**近重複リーク**への対策（メタデータ or perceptual hash）、
-3. 発表の筋（合成フィルタ→転移）を守るため**合成のみFTモデルも残して対比**する。
+ローカル画像とモデル重みはGit管理外なので、数値を出す前にファイルのハッシュ、学習条件、対応データを必ず確認する。
 
 ---
----
----
+
 # 2026-07-07（12週目）
 
 進捗報告の日。報告書 `進捗報告_2026-07-07.md` を作成し、指定見出し（2-1 使用モデル／2-2 目標判別精度＋フィルタ妥当性／2-3 データ分離／2-4 課題点）で最終版に整えた。
