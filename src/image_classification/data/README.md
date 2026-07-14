@@ -34,6 +34,7 @@ uv run python src/image_classification/main.py
 
 - `real_recaptcha/` は HuggingFace `nobodyPerfecZ/recaptchav2-29k` 由来。画像はGoogle所有のためコミット・再配布しない。
 - 評価用ラベルCSV（`../eval/labels/*.csv`）のキーは `img/1.jpg` のような「ディレクトリ名/ファイル名」の2階層。**この中のディレクトリ名を変えるとラベルと照合できなくなる**ので、名前は変えないこと。
+- `real_recaptcha/` を学習にも使う場合は、`../eval/splits/real_recaptcha_split.csv` を固定の正本とする。画像を直接コピーして分割せず、manifestの `train` / `val` / `test` を参照する。
 - git管理外のデータは別マシンには同期されない。モデルの取り違え事故（memo 2026-07-07参照）を防ぐため、数値を出す前に「そのデータ・モデルはいつどの設定で作ったか」を確認する。
 
 ## git管理と利用状況

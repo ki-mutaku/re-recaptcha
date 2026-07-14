@@ -281,6 +281,30 @@ TP（正しく選んだ）/ FP（誤爆）/ FN（見逃し）/ TN（正しく見
 
 zero-shot と FT はスコアの作り方が違いますが、どちらも0〜1のバスっぽさなので同じ AP 軸で比較できます。
 
+### 本物を一部だけ学習に使う追加実験
+
+合成データだけのFTに加え、`real_recaptcha` の一部を学習へ混ぜる実験を独立に行えます。
+先に全画像を **train 20% / val 10% / test 70%** に固定し、同一画像とdHashが近い画像を
+同じグループへ束ねます。これにより、見た目がほぼ同じ画像が学習と評価をまたぐリークを防ぎます。
+
+```bash
+# ① 固定splitを一度だけ作る（既存manifestは --force なしでは上書きしない）
+uv run python src/image_classification/eval/prepare_real_recaptcha_split.py
+
+# ② 枚数・画像・test非混入を確認する（学習はしない）
+uv run python src/image_classification/train_real_recaptcha.py --dry-run
+
+# ③ 合成train + 本物train各600枚で別名モデルを学習（長時間処理）
+uv run python src/image_classification/train_real_recaptcha.py
+
+# ④ 学習に使っていないtestだけで、合成のみFTと比較する
+uv run python src/image_classification/eval/compare_real_recaptcha_training.py
+```
+
+新しい重みは `models/best_resnet18_bus_mixed_real.pth` に保存され、既存の
+`models/best_resnet18_bus.pth` は上書きしません。splitの設計、出力、比較時の注意は
+[`docs/real_recaptcha_finetuning.md`](../../docs/real_recaptcha_finetuning.md) に記録しています。
+
 ### アブレーション（フィルタの寄与の切り分け・予備実験）
 
 「新フィルタは本物に似てる（FID）。じゃあ本当に精度も上がるの?」を確かめる予備実験です。
