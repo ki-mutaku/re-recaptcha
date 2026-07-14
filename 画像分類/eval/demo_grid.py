@@ -160,6 +160,17 @@ def main():
         prob_row = " ".join(f"{probs[r*3+c]:.2f}" for c in range(3))
         print(f"   {truth_row}          {pred_row}         {prob_row}")
 
+    # 各マスのファイル名と判定の内訳
+    print(f"\n{'マス':<4}{'ファイル名':<24}{'正解':<7}{'判定':<7}{'確信度':<9}{'○×'}")
+    print("-" * 62)
+    for i, (path, truth) in enumerate(tiles):
+        pred = preds[i]
+        mark = "○" if pred == truth else "×"
+        print(f"{i+1:<4}{os.path.basename(path):<24}"
+              f"{'バス' if truth else 'バス以外':<7}"
+              f"{'バス' if pred else 'バス以外':<7}"
+              f"{probs[i]:<9.3f}{mark}")
+
     n_correct = sum(p == t for p, t in zip(preds, truths))
     print(f"\n9マス中 {n_correct} マス正解")
     if all(p == t for p, t in zip(preds, truths)):
