@@ -203,14 +203,52 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
-# プロジェクト固有の大容量データ・生成物（スクリプトで作り直せるためコミットしない）
-# データセットの配置と作り方の一覧は src/image_classification/data/README.md を参照
+# YOLO / ML training outputs
+runs/
+yolov8_segmentation_runs/
+src/yolo_dataset/
+
+# Model weights
+*.pt
+*.pth
+*.onnx
+*.engine
+*.ckpt
+
+# OS / local editor artifacts
 .DS_Store
+**/.DS_Store
+
+# ローカルの画像分類データ・生成物（画像実体は残し、gitでは追跡しない）
+# 配置と再生成方法は src/image_classification/data/README.md を参照
+/src/image_classification/data/img/
+/src/image_classification/data/img_bus_rain/
+/src/image_classification/data/busbus/
 /src/image_classification/data/dataset/
 /src/image_classification/data/dataset_ablation/
 /src/image_classification/data/coco/
 /src/image_classification/data/test_images/
 /src/image_classification/models/
+
+# 他ラインのローカル／生成データ（mainのリファクタリング方針に合わせる）
+dataset/
+test_images/
+my_recaptcha_dataset/
+img/
+busbus/
+img_bus_rain/
+src/my_recaptcha_dataset/data/
+src/test_images_fog/
+src/test_images_mosaic/
+src/labels_fog/
+src/labels_mosaic/
+
+# Downloaded COCO artifacts
+annotations/
+annotations_trainval2017.zip
+
+# Ad-hoc visual outputs
+tracking*.png
 
 # Ruff stuff:
 .ruff_cache/

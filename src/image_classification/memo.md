@@ -85,8 +85,8 @@ UV_CACHE_DIR=/tmp/uv-cache uv run --frozen python src/image_classification/main.
 - 上のうち `sample_reCAPTCHA.jpg` だけは現行コードから参照されていなかったため、`data/samples/legacy/` へ隔離した。削除はせず由来確認用に保持。
 - git管理外の現行 `data/dataset/` 1,455枚は `_original`・`_degraded1`・`_degraded2` が各485枚で、旧 `_night`・`_rain` の混在なし。
 - `data/dataset_ablation/` の旧フィルタ画像は古い残骸ではなく比較実験用の生成物。通常学習には使わない。
-- ルートに残っていた未参照の `make rough image/rough_bus.py` は、現行フィルタと役割が重なるため `未使用/rough_bus.py` へ移した。
-- git管理は現状のままでよい。小さい評価データとデモ入力は再現性のため残し、大容量かつ再生成可能・再配布不可のデータは `.gitignore` の対象にする。
+- ルートに残っていた `make rough image/rough_bus.py` は、mainの担当分けに合わせて `src/object_detection/rough_bus.py` へ移した。
+- main統合時に追跡方針も統一し、`img/`・`img_bus_rain/`・`busbus/` はローカルに残したままgit追跡を外した。コード、ラベル、固定split、結果要約をgitで共有する。
 
 ### 他マシン（hibiki）への引き継ぎ【重要】
 

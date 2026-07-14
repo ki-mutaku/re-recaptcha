@@ -5,7 +5,7 @@
 ## 実行条件
 
 ```bash
-uv run python src/classification.py
+uv run python src/image_classification/classification.py
 ```
 
 - 画像ディレクトリ: `img`

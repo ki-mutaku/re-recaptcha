@@ -21,7 +21,4 @@ BDD100K（自動運転データセット）から「雨 or 夜 ＋ バス」の�
 外れている。本物 reCAPTCHA 寄りの劣化は `data_augment.py` の合成フィルタで再現する方針に
 切り替えたため未使用。過酷環境の実画像を足したくなったときの参考として残す。
 
-## rough_bus.py
-`val2017/` の画像を縮小して戻し、粗い画像を `bus/` に保存する初期の実験スクリプト。
-入出力がCWD依存で、現行の `make_recaptcha_like_image()` と役割が重複するため未使用。
-旧実験の経緯を確認できるよう、ルートの `make rough image/` からここへ移した。
+`rough_bus.py` はmainの担当分けに合わせて `src/object_detection/` へ移動した。
