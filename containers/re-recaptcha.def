@@ -23,7 +23,7 @@ From: pytorch/pytorch:2.11.0-cuda12.6-cudnn9-runtime
         libgl1 \
         libglib2.0-0 \
         libgomp1 \
-	python3-venv
+        python3-venv
     rm -rf /var/lib/apt/lists/*
 
     python -m venv --system-site-packages /opt/re-recaptcha-venv
@@ -60,4 +60,4 @@ print("ultralytics", ultralytics.__version__)
 PY
 
 %runscript
-    exec opt/re-recaptcha-venv/bin/python "$@"
+    exec /opt/re-recaptcha-venv/bin/python "$@"

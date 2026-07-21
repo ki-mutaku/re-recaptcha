@@ -28,10 +28,28 @@ mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/runs" "${PROJECT_DIR}/.cache/matp
 export SINGULARITYENV_MPLCONFIGDIR=/workspace/.cache/matplotlib
 export SINGULARITYENV_YOLO_CONFIG_DIR=/workspace/.cache/ultralytics
 
-"${RUNTIME}" exec --nv --cleanenv \
-    --bind "${PROJECT_DIR}:/workspace" \
-    --pwd /workspace \
-    "${IMAGE}" \
+run_in_container() {
+    "${RUNTIME}" exec --nv --cleanenv \
+        --bind "${PROJECT_DIR}:/workspace" \
+        --pwd /workspace \
+        "${IMAGE}" \
+        "$@"
+}
+
+TRAIN_DATA_ARGS=()
+if [[ "${PREPARE_DATASET:-0}" == "1" ]]; then
+    echo "初回用の画像・ラベル生成を実行します。"
+    run_in_container \
+        python src/segmentation/add_noise.py \
+        --seed 42
+    run_in_container \
+        python src/segmentation/extract_and_apply_labels.py
+    TRAIN_DATA_ARGS+=(--reshuffle)
+else
+    echo "既存の画像・ラベル・split manifestを再利用します。"
+fi
+
+run_in_container \
     python src/segmentation/train_yolov8_segmentation.py \
         --model yolov8n-seg.pt \
         --epochs 50 \
@@ -40,4 +58,5 @@ export SINGULARITYENV_YOLO_CONFIG_DIR=/workspace/.cache/ultralytics
         --device 0 \
         --workers "${SLURM_CPUS_PER_TASK}" \
         --project runs/yolov8_segmentation \
-        --name fog_mosaic_finetune
+        --name fog_mosaic_finetune \
+        "${TRAIN_DATA_ARGS[@]}"
