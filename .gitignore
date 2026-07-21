@@ -221,6 +221,7 @@ __marimo__/
 runs/
 yolov8_segmentation_runs/
 src/yolo_dataset/
+src/yolo_dataset.backup-*/
 
 # Model weights
 *.pt

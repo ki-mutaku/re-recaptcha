@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=recaptcha-yolo
-#SBATCH --partition=gpu
+#SBATCH --partition=steins
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G

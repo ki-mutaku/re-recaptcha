@@ -48,3 +48,40 @@ src/
   - データセット split
   - デバイス解決
   - 実験ログ出力
+
+## 2026-07-14: セグメンテーションデータの分割を再現可能にする
+
+### 目的
+
+- 同じ元画像から作った fog/mosaic 画像が train/val/test をまたがないようにする。
+- データセット再生成時に古いsplitのファイルが混ざらないようにする。
+- 分割結果をmanifestとして保存し、同じ入力では同じsplitを再利用する。
+
+### 変更内容
+
+- 元画像ID単位で train 80%、val 10%、test 10%へ分割するようにした。
+- `split_manifest.csv` に元画像ID、split、画像・ラベル内容の指紋を保存するようにした。
+- 新しいデータセットは一時ディレクトリで検証してから配置するようにした。
+- 既存の `yolo_dataset/` は削除せず、日時付きバックアップへ退避するようにした。
+- `add_noise.py` の入出力パスを `src/` 基準に統一した。
+- Slurmを含むCLI引数と `--prepare-only`、`--reshuffle` を追加した。
+
+### 確認コマンド
+
+```bash
+uv run python -m unittest discover -s tests
+uv run python -m compileall -q src tests
+uv run python src/segmentation/train_yolov8_segmentation.py --help
+```
+
+一時データを使うテストでは、同じ元画像IDの fog/mosaic が同じsplitへ入り、
+既存manifestが再利用され、古いファイルが新データセットへ混入しないことを確認した。
+
+実データを使う場合の入力は `src/test_images_fog/`、`src/test_images_mosaic/`、
+`src/labels_fog/`、`src/labels_mosaic/`、出力は `src/yolo_dataset/` となる。
+学習モデルのデフォルトは `yolov8n-seg.pt` で、今回の確認ではモデル学習と
+実データセットの再生成は実行していない。
+
+次に確認すべきことは、ラベル生成後に `--prepare-only` で実データセットを作り、
+manifestのID重複がないことと、Ultralyticsが生成した `data.yaml` から
+train/val/testを読み込めることを確認することである。
