@@ -1,3 +1,4 @@
+import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -12,10 +13,7 @@ import time
 import numpy as np
 
 # --- 設定 ---
-# パスはこのファイルの場所（src/image_classification）基準で解決する
-HERE = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(HERE, 'data', 'dataset')
-MODELS_DIR = os.path.join(HERE, 'models')
+DEFAULT_DATA_DIR = 'dataset'
 NUM_EPOCHS = 10         # 学習を繰り返す回数
 BATCH_SIZE = 32         # 1回にAIに見せる画像の枚数
 LEARNING_RATE = 0.0001   # 学習率（AIの学習スピード）
@@ -35,6 +33,21 @@ def set_seed(seed):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--data-dir",
+        default=DEFAULT_DATA_DIR,
+        help="train/val サブフォルダを含むデータセットのルート (default: dataset)",
+    )
+    parser.add_argument(
+        "--save-prefix",
+        default="best_resnet18_bus",
+        help="保存するモデルファイルのプレフィックス (default: best_resnet18_bus)",
+    )
+    args = parser.parse_args()
+    DATA_DIR = args.data_dir
+    SAVE_PREFIX = args.save_prefix
+
     set_seed(SEED)
 
     # 1. デバイスの確認（MacのGPU「MPS」が使えるかチェック）
@@ -170,15 +183,14 @@ def main():
 
     # 最も成績の良かった重みをロードしてファイルに保存
     model.load_state_dict(best_model_wts)
-    os.makedirs(MODELS_DIR, exist_ok=True)
-    save_path = os.path.join(MODELS_DIR, 'best_resnet18_bus.pth')
+    save_path = f'{SAVE_PREFIX}.pth'
     torch.save(model.state_dict(), save_path)
     print(f'ベストモデルを "{save_path}" に保存しました。')
 
     # 推論側（predict_recaptcha.py / 評価）が「どのインデックスがbusか」を
     # 確実に復元できるよう、クラス名の並びをJSONで一緒に保存する。
     # ImageFolderはクラスをアルファベット順に並べるため [bus, other] になる。
-    classes_path = os.path.join(MODELS_DIR, 'best_resnet18_bus_classes.json')
+    classes_path = f'{SAVE_PREFIX}_classes.json'
     with open(classes_path, 'w', encoding='utf-8') as f:
         json.dump(class_names, f, ensure_ascii=False, indent=2)
     print(f'クラス名の対応を "{classes_path}" に保存しました: {class_names}')

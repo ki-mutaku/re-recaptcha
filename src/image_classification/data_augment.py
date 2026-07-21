@@ -22,6 +22,9 @@ from PIL import Image, ImageEnhance, ImageDraw, ImageFilter
 # bus と other で同じ値を使うことで、毎回同じ条件のデータセットを作れる。
 DEFAULT_SEED = 42
 
+# 本物 reCAPTCHA タイルの実寸。劣化画像を最後にこのサイズへそろえる。
+TILE_SIZE = 100
+
 # save_augmented_variants が生成するファイル名の末尾。
 # フィルタ変更時の混在チェック（clean_stale_variants）や train/val分割
 # （split_train_val.py）で「どれが現行フィルタの生成物か」を判定する基準として使う。
@@ -101,6 +104,13 @@ def make_recaptcha_like_image(img):
     が主で、夜の暗さや雨だれの線は無い。よって make_night/make_rain とは別物として、
     「縮小して戻す＋軽いボケ＋彩度低下＋JPEG再圧縮」で本物寄りの劣化を作る。
 
+    最後に実寸 TILE_SIZE×TILE_SIZE（=100x100）へリサイズする。
+    これまでの縮小は「元サイズの30〜60%」という相対的な粗さだったため、
+    大きなCOCO画像では本物ほど細部が潰れていなかった。本物は 100x100 という
+    絶対的な解像度なので、実寸で合わせることで「224x224に拡大したときの
+    潰れ具合」が本番と一致する。
+    本物bus 2,000枚とのFID: 164.7（相対のみ）→ 156.0（実寸100x100化）で改善を確認済み。
+
     パラメータはランダム幅を持たせ、毎回少しずつ違う劣化を生成する。
     """
     img = img.convert("RGB")
@@ -123,7 +133,10 @@ def make_recaptcha_like_image(img):
     buffer = io.BytesIO()
     img.save(buffer, format="JPEG", quality=random.randint(20, 40))
     buffer.seek(0)
-    return Image.open(buffer).convert("RGB")
+    img = Image.open(buffer).convert("RGB")
+
+    # 5) 本物タイルと同じ実寸(100x100)に合わせる（絶対解像度をそろえる）
+    return img.resize((TILE_SIZE, TILE_SIZE), Image.BILINEAR)
 
 
 def save_augmented_variants(img, save_dir, base_filename):

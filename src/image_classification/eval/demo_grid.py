@@ -31,10 +31,10 @@ from torchvision import models, transforms
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PKG = os.path.dirname(HERE)
-MODEL_PATH = os.path.join(PKG, "models", "best_resnet18_bus.pth")
-CLASSES_PATH = os.path.join(PKG, "models", "best_resnet18_bus_classes.json")
-BUS_DIR = os.path.join(PKG, "data", "real_recaptcha", "bus")
-NONBUS_DIR = os.path.join(PKG, "data", "real_recaptcha", "nonbus")
+DEFAULT_MODEL_PATH = os.path.join(PKG, "models", "best_resnet18_bus.pth")
+DEFAULT_CLASSES_PATH = os.path.join(PKG, "models", "best_resnet18_bus_classes.json")
+DEFAULT_BUS_DIR = os.path.join(PKG, "data", "real_recaptcha", "bus")
+DEFAULT_NONBUS_DIR = os.path.join(PKG, "data", "real_recaptcha", "nonbus")
 OUT_DIR = os.path.join(HERE, "results")
 
 TILE = 100      # 1マスのpxサイズ（本物が100×100）
@@ -51,11 +51,11 @@ preprocess = transforms.Compose([
 ])
 
 
-def load_model():
-    class_names = json.load(open(CLASSES_PATH))
+def load_model(model_path, classes_path):
+    class_names = json.load(open(classes_path))
     model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
     model.fc = nn.Linear(model.fc.in_features, len(class_names))
-    model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
+    model.load_state_dict(torch.load(model_path, map_location="cpu"))
     model.eval()
     return model, class_names.index("bus")
 
@@ -67,12 +67,12 @@ def bus_prob(model, bus_idx, pil_img):
     return prob[bus_idx].item()
 
 
-def pick_tiles(n_bus, seed):
+def pick_tiles(n_bus, seed, bus_dir, nonbus_dir):
     random.seed(seed)
-    bus_files = sorted(f for f in os.listdir(BUS_DIR) if f.endswith(".png"))
-    non_files = sorted(f for f in os.listdir(NONBUS_DIR) if f.endswith(".png"))
-    chosen = [(os.path.join(BUS_DIR, f), True) for f in random.sample(bus_files, n_bus)] + \
-             [(os.path.join(NONBUS_DIR, f), False) for f in random.sample(non_files, 9 - n_bus)]
+    bus_files = sorted(f for f in os.listdir(bus_dir) if f.endswith(".png"))
+    non_files = sorted(f for f in os.listdir(nonbus_dir) if f.endswith(".png"))
+    chosen = [(os.path.join(bus_dir, f), True) for f in random.sample(bus_files, n_bus)] + \
+             [(os.path.join(nonbus_dir, f), False) for f in random.sample(non_files, 9 - n_bus)]
     random.shuffle(chosen)  # バスの位置をばらす
     return chosen  # [(path, is_bus_truth)] 長さ9
 
@@ -127,12 +127,16 @@ def main():
     ap.add_argument("--buses", type=int, default=3, help="バスを何マスにするか(1-8)")
     ap.add_argument("--seed", type=int, default=random.randint(0, 9999), help="並びの乱数シード")
     ap.add_argument("--threshold", type=float, default=0.5, help="バス判定のしきい値")
+    ap.add_argument("--model-path", default=DEFAULT_MODEL_PATH, help="モデルの .pth ファイルパス")
+    ap.add_argument("--classes-path", default=DEFAULT_CLASSES_PATH, help="クラス名 JSON のパス")
+    ap.add_argument("--bus-dir", default=DEFAULT_BUS_DIR, help="バスタイルのディレクトリ")
+    ap.add_argument("--nonbus-dir", default=DEFAULT_NONBUS_DIR, help="バス以外タイルのディレクトリ")
     args = ap.parse_args()
     args.buses = max(1, min(8, args.buses))
 
     os.makedirs(OUT_DIR, exist_ok=True)
-    model, bus_idx = load_model()
-    tiles = pick_tiles(args.buses, args.seed)
+    model, bus_idx = load_model(args.model_path, args.classes_path)
+    tiles = pick_tiles(args.buses, args.seed, args.bus_dir, args.nonbus_dir)
 
     grid_img, tile_imgs = compose_grid(tiles)
     in_path = os.path.join(OUT_DIR, "demo_grid_input.png")
