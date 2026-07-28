@@ -21,7 +21,9 @@ from torchvision.models import ResNet18_Weights
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
 IMAGE_SIZE = 224
-DEFAULT_IMAGE_DIR = "img_bus_rain"
+# 評価画像のデフォルト（このファイルの場所基準で解決する）
+_PKG_DIR = Path(__file__).resolve().parent
+DEFAULT_IMAGE_DIR = str(_PKG_DIR / "data" / "img_bus_rain")
 DEFAULT_TARGET = "bus"
 
 # 選択の判定に使う確信度スコアの閾値。スコアが閾値以上の画像を「お題が写っている」とみなす。
@@ -78,8 +80,10 @@ def natural_sort_key(path):
 
 def collect_image_paths(image_dir):
     """
-    指定ディレクトリ直下にある画像ファイルをすべて取得する。
+    指定ディレクトリ以下にある画像ファイルをすべて取得する（サブディレクトリも含む）。
 
+    real_recaptcha/{bus,nonbus}/ のようにクラスごとサブディレクトリに
+    分かれているデータセットも1回の呼び出しで扱えるようにするため再帰的に探す。
     reCAPTCHAのタイル番号と出力インデックスが対応しやすいように、
     ファイル名は自然順で並べる。
     """
@@ -88,7 +92,7 @@ def collect_image_paths(image_dir):
     return sorted(
         (
             path
-            for path in image_dir_path.iterdir()
+            for path in image_dir_path.rglob("*")
             if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
         ),
         key=natural_sort_key,

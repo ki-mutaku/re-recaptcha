@@ -16,7 +16,7 @@ reCAPTCHA の「バスが写っている画像をすべて選んでください�
 ターミナルで次のコマンドを実行します。
 
 ```bash
-uv run python src/image_classification/classification.py --image-dir img --target bus --threshold 0.05
+uv run python src/image_classification/classification.py --image-dir src/image_classification/data/img --target bus --threshold 0.05
 ```
 
 - `uv run` … 必要なライブラリ込みで Python を実行するコマンド（環境構築済みなら気にしなくてOK）
@@ -28,7 +28,7 @@ uv run python src/image_classification/classification.py --image-dir img --targe
 
 | 引数 | 何を指定するか | 例 | 省略時 |
 |---|---|---|---|
-| `--image-dir` | 調べたい画像が入っているフォルダ | `img` | `img_bus_rain` |
+| `--image-dir` | 調べたい画像が入っているフォルダ | `src/image_classification/data/img` | `src/image_classification/data/img_bus_rain` |
 | `--target` | 探したいお題 | `bus`（日本語の `バス` も可） | `bus` |
 | `--threshold` | 「お題あり」と判断する厳しさ（後述） | `0.05` | `0.05` |
 
@@ -75,8 +75,8 @@ ResNet18 の答えは細かすぎる（`school bus` と `minibus` が別物扱�
 画像ごとに、お題の確信度スコアが表示されます。
 
 ```text
-スコア [img/1.jpg]: bus=0.953   ← バスの自信が高い
-スコア [img/2.jpg]: bus=0.000   ← バスではなさそう
+スコア [src/image_classification/data/img/1.jpg]: bus=0.953   ← バスの自信が高い
+スコア [src/image_classification/data/img/2.jpg]: bus=0.000   ← バスではなさそう
 ```
 
 ### ② 読み込んだ画像一覧
@@ -84,10 +84,10 @@ ResNet18 の答えは細かすぎる（`school bus` と `minibus` が別物扱�
 フォルダ内の画像を自動ですべて読み込みます（番号順に並びます）。
 
 ```text
-読み込んだ画像: ['img/1.jpg', 'img/2.jpg', 'img/3.jpg', 'img/4.jpg']
+読み込んだ画像: ['src/image_classification/data/img/1.jpg', 'src/image_classification/data/img/2.jpg', 'src/image_classification/data/img/3.jpg', 'src/image_classification/data/img/4.jpg']
 ```
 
-`img/10.jpg` のようなファイルも自動で対象になるので、手で並べる必要はありません。
+`src/image_classification/data/img/10.jpg` のようなファイルも自動で対象になるので、手で並べる必要はありません。
 
 ### ③ 最終的な選択結果
 
@@ -97,7 +97,7 @@ ResNet18 の答えは細かすぎる（`school bus` と `minibus` が別物扱�
 最終的な選択結果: [0, 2, 3, 4, 5, 6, 7, 26, 31, 57]
 ```
 
-`0` は読み込んだ画像一覧の**1枚目**（`img/1.jpg`）を指します。
+`0` は読み込んだ画像一覧の**1枚目**（`src/image_classification/data/img/1.jpg`）を指します。
 
 ---
 

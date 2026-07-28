@@ -5,11 +5,14 @@ from torchvision import models, transforms
 from PIL import Image
 
 # --- 設定 ---
+# パスはこのファイルの場所（src/image_classification）基準で解決する
+HERE = os.path.dirname(os.path.abspath(__file__))
+
 # 1. 保存した最高精度のモデル（AIの脳みそ）
-MODEL_PATH = "best_resnet18_bus.pth"
+MODEL_PATH = os.path.join(HERE, "models", "best_resnet18_bus.pth")
 
 # 2. テスト画像の入っているフォルダ
-TEST_DIR = "test_images"
+TEST_DIR = os.path.join(HERE, "data", "test_images")
 
 # 3. クラス名（アルファベット順で学習したため、0がbus、1がother）
 CLASSES = ['bus', 'other']

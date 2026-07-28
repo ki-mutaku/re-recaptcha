@@ -203,20 +203,6 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
-# Ruff stuff:
-.ruff_cache/
-
-# PyPI configuration file
-.pypirc
-
-# Marimo
-marimo/_static/
-marimo/_lsp/
-__marimo__/
-
-# Streamlit
-.streamlit/secrets.toml
-
 # YOLO / ML training outputs
 runs/
 yolov8_segmentation_runs/
@@ -234,9 +220,21 @@ src/yolo_dataset.backup-*/
 .DS_Store
 **/.DS_Store
 
-# Local/generated experiment datasets and labels
-# Keep canonical small configs/docs in git, but do not add new generated image/label dumps by default.
+# ローカルの画像分類データ・生成物（画像実体は残し、gitでは追跡しない）
+# 配置と再生成方法は src/image_classification/data/README.md を参照
+/src/image_classification/data/img/
+/src/image_classification/data/img_bus_rain/
+/src/image_classification/data/busbus/
+/src/image_classification/data/dataset/
+/src/image_classification/data/dataset_real/
+/src/image_classification/data/dataset_ablation/
+/src/image_classification/data/coco/
+/src/image_classification/data/test_images/
+/src/image_classification/models/
+
+# 他ラインのローカル／生成データ（mainのリファクタリング方針に合わせる）
 dataset/
+dataset_real/
 test_images/
 my_recaptcha_dataset/
 img/
@@ -254,3 +252,24 @@ annotations_trainval2017.zip
 
 # Ad-hoc visual outputs
 tracking*.png
+
+# モデルの重みファイル（ルート直下・全バリアント）
+best_resnet18_bus*.pth
+best_resnet18_bus*_classes*.json
+
+# Ruff stuff:
+.ruff_cache/
+
+# PyPI configuration file
+.pypirc
+
+# Marimo
+marimo/_static/
+marimo/_lsp/
+__marimo__/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# 本物reCAPTCHA画像（Google所有・再配布しない）
+/src/image_classification/data/real_recaptcha/

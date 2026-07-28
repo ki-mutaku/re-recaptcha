@@ -2,11 +2,14 @@ import os
 from PIL import Image
 
 # --- 設定 ---
+# パスはこのファイルの場所（src/image_classification）基準で解決する
+HERE = os.path.dirname(os.path.abspath(__file__))
+
 # 1. 保存したreCAPTCHA画像（マス目部分のみ）
-INPUT_IMAGE = "sample.jpg"
+INPUT_IMAGE = os.path.join(HERE, "data", "samples", "sample.jpg")
 
 # 2. 分割した画像の保存先フォルダ
-OUTPUT_DIR = "test_images"
+OUTPUT_DIR = os.path.join(HERE, "data", "test_images")
 # -----------
 
 def main():
@@ -19,6 +22,8 @@ def main():
 
     try:
         with Image.open(INPUT_IMAGE) as img:
+            # sample.jpg は実体がRGBAのPNGなので、JPEG保存できるようRGBに変換する
+            img = img.convert("RGB")
             # 画像の幅と高さを取得
             width, height = img.size
             

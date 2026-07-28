@@ -49,6 +49,14 @@ src/
   - デバイス解決
   - 実験ログ出力
 
+## 2026-07-14: image-classification-2 への統合
+
+- `origin/main` の Refactoring (#28) を取り込み、`src/image_classification/`、`src/object_detection/`、`src/segmentation/` の3ライン構成へ統一した。
+- 画像分類は分岐後に進んだ新版を採用し、旧版とのrename競合は新版側へ解決した。
+- `img/`、`img_bus_rain/`、`busbus/` はローカル実験資産として保持しつつ、mainと同じくgit追跡を解除した。
+- 物体検出用の `src/test_images_coco/` と、mainが追加したコンテナ・Slurm資料は維持した。
+- `rough_bus.py` はmainの担当分けに従って `src/object_detection/` に配置した。
+
 ## 2026-07-14: セグメンテーションデータの分割を再現可能にする
 
 ### 目的

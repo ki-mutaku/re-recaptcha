@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "seed": 42,
+  "ratios": {
+    "train": 0.2,
+    "val": 0.1,
+    "test": 0.7
+  },
+  "near_duplicate_hamming_distance": 4,
+  "dataset_fingerprint_sha256": "f6306a8d562a94a734a5524e2ee7f95287f509e87728a8e75a0e52926f1eb0b7",
+  "manifest_sha256": "e4f85c8142d96a7c226c537b483f6a3946b0b62c94cf67a06614b5d995de08a2",
+  "images": 13386,
+  "groups": 13251,
+  "mixed_label_groups": 0,
+  "counts": {
+    "train": {
+      "bus": 1339,
+      "nonbus": 1339
+    },
+    "val": {
+      "bus": 669,
+      "nonbus": 669
+    },
+    "test": {
+      "bus": 4685,
+      "nonbus": 4685
+    }
+  }
+}

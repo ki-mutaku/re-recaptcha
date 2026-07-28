@@ -1,10 +1,14 @@
 import os
 import random
 import shutil
+from collections import defaultdict
+
+from data_augment import VARIANT_SUFFIXES
 
 # --- 設定 ---
-# データセットの大元フォルダ
-BASE_DIR = "dataset"
+# データセットの大元フォルダ（このファイルの場所基準で解決する）
+HERE = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.join(HERE, "data", "dataset")
 TRAIN_DIR = os.path.join(BASE_DIR, "train")
 VAL_DIR = os.path.join(BASE_DIR, "val")
 
@@ -13,7 +17,24 @@ CLASSES = ["bus", "other"]
 
 # 検証用(val)に回す割合（20% = 0.2）
 VAL_RATIO = 0.2
+# 同じ元画像から作った加工バリエーション（original/degraded1/degraded2）は同じ景色なので、
+# train と val に分かれるとデータリークになる。判定用のサフィックスは data_augment.py の
+# VARIANT_SUFFIXES と共通化している（download_train_*.py の清掃処理と基準を揃えるため）。
 # -----------
+
+
+def base_key(filename):
+    """
+    加工バリエーションをまとめるためのキー（元画像ID部分）を返す。
+
+    例: "bus_000000012345_degraded1.jpg" -> "bus_000000012345"
+    サフィックスが無いファイルは、その名前自体をキーにする。
+    """
+    for suffix in VARIANT_SUFFIXES:
+        if filename.endswith(suffix):
+            return filename[: -len(suffix)]
+    return filename
+
 
 def main():
     print("学習用(train)と検証用(val)のデータ分割を開始します...\n")
@@ -37,27 +58,38 @@ def main():
             print(f"⚠️ 警告: '{cls}' フォルダに画像がありません。")
             continue
 
-        # 移動させる枚数を計算 (全画像の20%)
-        val_count = int(total_images * VAL_RATIO)
+        # 元画像ID単位でバリエーションをまとめる（リーク防止の肝）
+        groups = defaultdict(list)
+        for img in images:
+            groups[base_key(img)].append(img)
 
-        # 画像リストをランダムにシャッフル（原本・夜・雨を均等にばらけさせるため）
-        random.seed(42) # いつ実行してもランダム性が一定になるようにシードを固定
-        random.shuffle(images)
+        group_keys = list(groups.keys())
 
-        # valに移動させる画像を抽出
-        val_images = images[:val_count]
+        # 元画像ID単位でシャッフルしてから val に回すグループを選ぶ。
+        # これで original/night/rain が必ず train か val のどちらか一方にまとまる。
+        random.seed(42)  # いつ実行してもランダム性が一定になるようにシードを固定
+        random.shuffle(group_keys)
+
+        val_group_count = int(len(group_keys) * VAL_RATIO)
+        val_keys = group_keys[:val_group_count]
 
         # 実際の移動処理 (copyではなく、trainからvalへmoveします)
         print(f"【{cls}クラス】の処理中...")
-        for img in val_images:
-            src_path = os.path.join(train_cls_dir, img)
-            dst_path = os.path.join(val_cls_dir, img)
-            shutil.move(src_path, dst_path)
+        val_moved = 0
+        for key in val_keys:
+            for img in groups[key]:
+                shutil.move(
+                    os.path.join(train_cls_dir, img),
+                    os.path.join(val_cls_dir, img),
+                )
+                val_moved += 1
 
         # 結果の報告
-        train_remain = total_images - val_count
-        print(f"  -> 全 {total_images} 枚のうち、{val_count} 枚を val へ移動しました。")
-        print(f"  -> train に {train_remain} 枚残りました。\n")
+        train_remain = total_images - val_moved
+        print(
+            f"  -> 元画像 {len(group_keys)} 枚のうち {val_group_count} 枚分（{val_moved} ファイル）を val へ移動しました。"
+        )
+        print(f"  -> train に {train_remain} ファイル残りました。\n")
 
     print("すべての分割作業が完了しました！")
     print(f"理想的な '{BASE_DIR}' のディレクトリ構成が完成しました。")
