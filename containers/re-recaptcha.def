@@ -1,11 +1,13 @@
 Bootstrap: docker
-From: pytorch/pytorch:2.11.0-cuda12.8-cudnn9-runtime
+From: pytorch/pytorch:2.11.0-cuda12.6-cudnn9-runtime
 
 %labels
     Author re-recaptcha
     Description Python/PyTorch environment for re-recaptcha experiments
 
 %environment
+    export VIRTUAL_ENV=/opt/re-recaptcha-venv
+    export PATH=/opt/re-recaptcha-venv/bin:$PATH
     export PYTHONUNBUFFERED=1
     export PIP_NO_CACHE_DIR=1
     export TORCH_HOME=/opt/torch-cache
@@ -20,14 +22,15 @@ From: pytorch/pytorch:2.11.0-cuda12.8-cudnn9-runtime
         git \
         libgl1 \
         libglib2.0-0 \
-        libgomp1
+        libgomp1 \
+        python3-venv
     rm -rf /var/lib/apt/lists/*
 
-    python -m pip install --upgrade pip
+    python -m venv --system-site-packages /opt/re-recaptcha-venv
 
-    # Torch/TorchVision are provided by the PyTorch CUDA base image.
-    # Keep the project-specific direct dependencies pinned to pyproject/uv.lock.
-    python -m pip install \
+    /opt/re-recaptcha-venv/bin/python -m pip install --upgrade pip
+
+    /opt/re-recaptcha-venv/bin/python -m pip install \
         "grad-cam==1.5.5" \
         "matplotlib==3.10.9" \
         "numpy==2.4.4" \
@@ -38,14 +41,14 @@ From: pytorch/pytorch:2.11.0-cuda12.8-cudnn9-runtime
     mkdir -p /opt/torch-cache
 
     # Pre-download ResNet18 weights so compute nodes do not need internet access.
-    TORCH_HOME=/opt/torch-cache python - <<'PY'
+    TORCH_HOME=/opt/torch-cache /opt/re-recaptcha-venv/bin/python - <<'PY'
 from torchvision.models import ResNet18_Weights, resnet18
 
 resnet18(weights=ResNet18_Weights.DEFAULT)
 PY
     chmod -R a+rX /opt/torch-cache
 
-    python - <<'PY'
+    /opt/re-recaptcha-venv/bin/python - <<'PY'
 import torch
 import torchvision
 import ultralytics
@@ -57,4 +60,4 @@ print("ultralytics", ultralytics.__version__)
 PY
 
 %runscript
-    exec python "$@"
+    exec /opt/re-recaptcha-venv/bin/python "$@"
