@@ -12,11 +12,118 @@
 代表的な入口:
 
 ```bash
-uv run python src/segmentation/add_noise.py
-uv run python src/segmentation/extract_and_apply_labels.py
-uv run python src/segmentation/train_yolov8_segmentation.py
-uv run python src/segmentation/predict_grid_tiles.py
+uv run --frozen python src/segmentation/add_noise.py
+uv run --frozen python src/segmentation/extract_and_apply_labels.py
+uv run --frozen python src/segmentation/train_yolov8_segmentation.py
+uv run --frozen python src/segmentation/predict_grid_tiles.py
 ```
+
+## 0からの再現手順
+
+前提はPython 3.12、[`uv`](https://docs.astral.sh/uv/)、`curl`、`unzip`です。
+コマンドはすべてリポジトリのルートで実行します。依存関係、GitHub Releaseの
+画像データセット、YOLOv8-segの事前学習済み重みを取得するため、ネット接続が必要です。
+
+### 手順0: 依存関係を入れる
+
+```bash
+uv sync --frozen
+```
+
+以降も`uv run --frozen`を使い、コミット済みの`uv.lock`から環境を作ります。
+
+### 手順1: 元画像データセットを取得する
+
+セグメンテーション実験用の元画像は、Gitリポジトリには含めず
+[GitHub Release `dataset`](https://github.com/ki-mutaku/re-recaptcha/releases/tag/dataset)
+で配布しています。Release assetをダウンロードし、`src/`へ展開します。
+
+```bash
+curl -fL \
+  https://github.com/ki-mutaku/re-recaptcha/releases/download/dataset/my_recaptcha_dataset.zip \
+  -o /tmp/my_recaptcha_dataset.zip
+
+shasum -a 256 /tmp/my_recaptcha_dataset.zip
+unzip -q /tmp/my_recaptcha_dataset.zip -d src -x '__MACOSX/*'
+```
+
+SHA-256は次と一致することを確認してください。
+
+```text
+82ddfd0627c4c4ebe95f932f62c4dacb52e420184e73c0ffc96e7e2593db310d
+```
+
+Linuxで`shasum`が無い場合は`sha256sum /tmp/my_recaptcha_dataset.zip`を使います。
+展開後、次のファイルが存在すれば準備完了です。
+
+```text
+src/my_recaptcha_dataset/
+├── data/        # 元画像500枚
+└── labels.json
+```
+
+`src/my_recaptcha_dataset/`はgit管理外です。既存のローカルデータがある場合は、
+上書きせずに退避してから展開してください。
+
+### 手順2: fog / mosaic画像を生成する
+
+```bash
+uv run --frozen python src/segmentation/add_noise.py --seed 42
+```
+
+元画像500枚から、`src/test_images_fog/`と`src/test_images_mosaic/`を生成します。
+
+### 手順3: セグメンテーションラベルを生成する
+
+```bash
+uv run --frozen python src/segmentation/extract_and_apply_labels.py
+```
+
+初回はUltralyticsが`yolov8n-seg.pt`を取得します。元画像に対するモデルの予測から
+疑似ラベルを作り、`src/labels_fog/`と`src/labels_mosaic/`へ保存します。
+Releaseに含まれる`labels.json`を直接YOLOラベルとして使う処理ではありません。
+
+### 手順4: データ分割と学習を行う
+
+```bash
+uv run --frozen python src/segmentation/train_yolov8_segmentation.py \
+  --model yolov8n-seg.pt \
+  --epochs 50 \
+  --imgsz 640 \
+  --batch 16 \
+  --seed 42 \
+  --project runs/segment/yolov8_segmentation_runs \
+  --name fog_mosaic_finetune-4
+```
+
+同じ元画像のfog / mosaic版を同じsplitへまとめ、train 80%、val 10%、test 10%で
+`src/yolo_dataset/`を作ってから学習します。GPUメモリが不足する場合は`--batch`を
+8、4、2の順に下げてください。CPUでも実行できますが、学習には時間がかかります。
+
+主な出力:
+
+- `src/yolo_dataset/split_manifest.csv`
+- `src/yolo_dataset/data.yaml`
+- `runs/segment/yolov8_segmentation_runs/fog_mosaic_finetune-4/weights/best.pt`
+
+学習を始めず、データセット構成だけ確認する場合は次を実行します。
+
+```bash
+uv run --frozen python src/segmentation/train_yolov8_segmentation.py --prepare-only
+```
+
+### 手順5: test splitで4×4タイル選択を評価する
+
+```bash
+uv run --frozen python src/segmentation/predict_grid_tiles.py
+```
+
+既定では手順4の`best.pt`、`src/yolo_dataset/images/test`、対応する正解ラベルを使い、
+タイル単位のAccuracy、Precision、Recall、F1と画像単位のExact Matchを計算します。
+結果は`runs/segment/grid_tile_predictions/`以下へ保存されます。
+
+GPUサーバーでSingularity / Slurmを使う場合は、
+[`docs/singularity_slurm.md`](../../docs/singularity_slurm.md)も参照してください。
 
 ## ファインチューニング済みモデルで4×4タイルを選択する
 
@@ -35,13 +142,13 @@ uv run python src/segmentation/predict_grid_tiles.py
 `best.pt` を使い、`src/yolo_dataset/images/test` の全画像から `bus` を探します。
 
 ```bash
-uv run python src/segmentation/predict_grid_tiles.py
+uv run --frozen python src/segmentation/predict_grid_tiles.py
 ```
 
 別の対象クラスや1枚の画像を指定する場合:
 
 ```bash
-uv run python src/segmentation/predict_grid_tiles.py \
+uv run --frozen python src/segmentation/predict_grid_tiles.py \
   --target car \
   --source src/yolo_dataset/images/test/fog_000000001625.jpg \
   --conf 0.25
@@ -86,7 +193,7 @@ val 10%、test 10%です。
 データセットだけ準備する場合:
 
 ```bash
-uv run python src/segmentation/train_yolov8_segmentation.py --prepare-only
+uv run --frozen python src/segmentation/train_yolov8_segmentation.py --prepare-only
 ```
 
 既存の `src/yolo_dataset/` がある場合は削除せず、日時付きの
@@ -96,7 +203,7 @@ uv run python src/segmentation/train_yolov8_segmentation.py --prepare-only
 分割比率や乱数シードを変更する場合:
 
 ```bash
-uv run python src/segmentation/train_yolov8_segmentation.py \
+uv run --frozen python src/segmentation/train_yolov8_segmentation.py \
   --train-ratio 0.8 \
   --val-ratio 0.1 \
   --seed 42 \
